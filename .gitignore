@@ -22,6 +22,8 @@ web/dist/
 server/dist/
 *.tar.gz
 *.zip
+# 靶站的 ZIP 是教学资源，必须进仓库（上面的 *.zip 是排除部署包的）
+!server/media/datasets.zip
 !pyodide-lock.json
 
 # ---------------------------------------------------------------- 依赖与缓存
