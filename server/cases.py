@@ -6,7 +6,8 @@
 """
 from labs import (BOOKS, QUOTES, MOVIES, NEWS, API_ITEMS,
                   ANSWERS, page_of_books, VAULT_SECRET, GUARD_TOKEN,
-                  REPORT_SECRET, LAB_KEY, REQUIRED_UA, REQUIRED_REFERER)
+                  REPORT_SECRET, LAB_KEY, REQUIRED_UA, REQUIRED_REFERER,
+                  ROBOTS_DISALLOW)
 
 # 站点同源基准由沙箱注入；案例代码统一用 BASE，避免硬编码域名/协议
 HEAD = "import requests\nfrom lxml import etree\nfrom bs4 import BeautifulSoup\n\n"
@@ -32,7 +33,8 @@ print(answer)
 """,
         'hint': '逐行 splitlines()，用 startswith("Disallow:") 过滤，再 split(":", 1)[1].strip() 取值，最后 set 去重。',
         'urls': ['/lab/robots.txt'], 'type': 'ulist',
-        'answer': ['/api/check', '/api/check_case', '/auth/', '/lab/trap/', '/admin/'],
+        # 答案从 ROBOTS_DISALLOW 推导，改 robots 时不会再出现"题目答案没同步"
+        'answer': sorted(ROBOTS_DISALLOW),
     },
     {
         'slug': 'http-and-html', 'title': '数一数页面里有多少本书', 'points': 20,

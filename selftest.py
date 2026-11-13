@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / 'server'))
 os.chdir(ROOT / 'server')
 
 from app import Handler, SPRITE, ROBOTS  # noqa: E402
-from labs import ANSWERS, BASE, TASKS    # noqa: E402
+from labs import ANSWERS, BASE, TASKS, SITES    # noqa: E402
 
 Handler.log_message = lambda self, *a: None
 srv = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -75,12 +75,13 @@ c, b, _ = req('/api/courses')
 check('/api/courses 返回 20 课', c == 200 and len(json.loads(b)) == 20)
 c, b, _ = req('/api/levels')
 d = json.loads(b)
-check('/api/levels 返回 5 级 30 关', len(d['levels']) == 5 and len(d['tasks']) == 30)
+check('/api/levels 返回 5 级且关卡数与数据源一致',
+      len(d['levels']) == 5 and len(d['tasks']) == len(TASKS))
 _leak = [k for k, v in ANSWERS.items()
          if len(str(v)) > 8 and not str(v).startswith('/') and str(v) in b]
 check('关卡数据未泄露答案', not _leak, str(_leak[:3]))
 c, b, _ = req('/api/labs')
-check('/api/labs 返回 11 个靶站', len(json.loads(b)) == 11)
+check('/api/labs 靶站数与数据源一致', len(json.loads(b)) == len(SITES))
 c, b, _ = req('/api/courses/xpath')
 check('课程详情含示例代码', 'lxml' in b or 'etree' in b)
 
@@ -160,6 +161,69 @@ check('ads.txt 以换行结尾', b.endswith('\n'))
 check('ads.txt 短缓存（改动尽快生效）',
       'no-cache' in hd.get('Cache-Control', ''))
 
+print('\n=== 4e. 访问统计与后台 ===')
+import app as _app  # noqa: E402
+
+c, b, hd = req('/admin')
+check('未登录访问后台给出登录提示', c == 200 and '请先用 GitHub 登录' in b)
+check('后台页面 noindex（不给搜索引擎线索）', 'noindex' in b)
+check('robots 禁止收录 /admin', 'Disallow: /admin' in req('/robots.txt')[1])
+# 伪造一个不存在的会话，必须被拒
+c, b, hd = req('/admin', headers={'Cookie': 'sl_sid=forged-not-a-real-session'})
+check('伪造会话不能进入后台', c == 200 and '请先用 GitHub 登录' in b)
+
+_app.flush_hits()
+with _app.db() as _c:
+    _c.row_factory = None
+    _n = _c.execute('SELECT COUNT(*) FROM hits').fetchone()[0]
+    _kinds = {r[0] for r in _c.execute('SELECT DISTINCT kind FROM hits')}
+    _assets = _c.execute(
+        "SELECT COUNT(*) FROM hits WHERE path LIKE '/assets/%'").fetchone()[0]
+check('请求已写入 hits 表', _n > 0, 'hits=%d' % _n)
+check('能区分访客与爬虫类型', len(_kinds) >= 1, str(_kinds))
+check('静态资源不进统计', _assets == 0)
+check('隐私政策披露访问日志',
+      '访问日志与流量分析' in req('/privacy')[1] and '90 天' in req('/privacy')[1])
+
+print('\n=== 5a. 媒体与文件靶站 ===')
+c, b, _ = req('/lab/gallery')
+check('图库页可访问', c == 200 and '图库' in b)
+check('图库含 6 张照片卡片', b.count('class="shot"') == 6)
+check('原图地址在 data-src（不是 src）',
+      'data-src="/media/photo-01.jpg"' in b and 'src="/media/thumb-01.jpg"' in b)
+check('srcset 提供多分辨率', 'srcset="/media/photo-01-600.jpg 600w' in b)
+c, b, _ = req('/lab/gallery/1')
+check('图库详情用 CSS 背景图', c == 200 and "background-image:url('/media/photo-01.jpg')" in b)
+c, b, _ = req('/lab/gallery/99')
+check('不存在的照片返回 404', c == 404)
+
+c, b, _ = req('/lab/media')
+check('视频页含 video 与 source', c == 200 and '<video' in b and '<source' in b)
+check('视频带字幕轨道', '<track' in b and '.vtt' in b)
+check('视频有 poster 封面', 'poster="/media/video-poster.jpg"' in b)
+
+c, b, _ = req('/lab/files')
+check('文件页列出 4 个文件', c == 200 and b.count('download>') >= 4)
+for fn, ctype in (('photo-01.jpg', 'image/jpeg'),
+                  ('clip-01.mp4', 'video/mp4'),
+                  ('crawler-handbook.pdf', 'application/pdf'),
+                  ('books-export.csv', 'text/csv'),
+                  ('datasets.zip', 'application/zip'),
+                  ('clip-01.vtt', 'text/vtt')):
+    c, b2, hd = req('/media/' + fn)
+    check('资源 %s 类型正确' % fn,
+          c == 200 and ctype in hd.get('Content-Type', ''),
+          hd.get('Content-Type', ''))
+
+c, b, _ = req('/about')
+check('about 页靶站数量与实际一致（%d）' % len(SITES),
+      ('%d 个示例靶站' % len(SITES)) in b)
+check('about 页关卡数量与实际一致（%d）' % len(TASKS),
+      ('%d 关分级训练场' % len(TASKS)) in b)
+
+check('靶站索引包含新增三站',
+      all(x in req('/lab/')[1] for x in ('/lab/gallery', '/lab/media', '/lab/files')))
+
 print('\n=== 5. 靶场页面（服务端渲染，源码即数据） ===')
 c, b, _ = req('/lab/')
 check('靶站索引', c == 200 and '书城' in b)
@@ -231,7 +295,7 @@ for tid, ans in ANSWERS.items():
     if not d.get('ok'):
         ok_all = False
         print('       %s 判分失败: %s' % (tid, d.get('message')))
-check('30 关标准答案全部判为通过', ok_all)
+check('全部 %d 关标准答案判为通过' % len(ANSWERS), ok_all)
 c, b, _ = req('/api/check', method='POST', data={'task_id': 'L1-3', 'answer': '999'})
 check('错误答案被拒绝并返回提示', not json.loads(b)['ok'] and bool(json.loads(b)['hint']))
 c, b, _ = req('/api/check', method='POST', data={'task_id': 'NOPE', 'answer': 'x'})

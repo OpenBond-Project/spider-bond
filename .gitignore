@@ -55,3 +55,9 @@ desktop.ini
 
 # 临时提交信息文件
 .commitmsg
+
+# 本地测试产物
+admin_shot.png
+admin_preview.html
+.sid_test
+shot_*.png

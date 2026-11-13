@@ -1,0 +1,71 @@
+{
+  "source": "Spider Bond 示例数据集",
+  "generated": "2026-11-13",
+  "count": 8,
+  "books": [
+    {
+      "id": 1,
+      "title": "深入理解计算机系统",
+      "author": "Randal Bryant",
+      "publisher": "机械工业出版社",
+      "price": 139.0,
+      "rating": 9.2
+    },
+    {
+      "id": 2,
+      "title": "Python 编程：从入门到实践",
+      "author": "Eric Matthes",
+      "publisher": "人民邮电出版社",
+      "price": 89.8,
+      "rating": 9.0
+    },
+    {
+      "id": 3,
+      "title": "数据密集型应用系统设计",
+      "author": "Martin Kleppmann",
+      "publisher": "中国电力出版社",
+      "price": 128.0,
+      "rating": 9.4
+    },
+    {
+      "id": 4,
+      "title": "HTTP 权威指南",
+      "author": "David Gourley",
+      "publisher": "人民邮电出版社",
+      "price": 109.0,
+      "rating": 8.8
+    },
+    {
+      "id": 5,
+      "title": "流畅的 Python",
+      "author": "Luciano Ramalho",
+      "publisher": "人民邮电出版社",
+      "price": 139.0,
+      "rating": 9.1
+    },
+    {
+      "id": 6,
+      "title": "算法（第 4 版）",
+      "author": "Robert Sedgewick",
+      "publisher": "人民邮电出版社",
+      "price": 99.0,
+      "rating": 9.3
+    },
+    {
+      "id": 7,
+      "title": "计算机网络：自顶向下方法",
+      "author": "James Kurose",
+      "publisher": "机械工业出版社",
+      "price": 89.0,
+      "rating": 9.2
+    },
+    {
+      "id": 8,
+      "title": "重构：改善既有代码的设计",
+      "author": "Martin Fowler",
+      "publisher": "人民邮电出版社",
+      "price": 118.0,
+      "rating": 9.1
+    }
+  ]
+}

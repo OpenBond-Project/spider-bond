@@ -108,6 +108,17 @@ LAB_CSS = """/* SpiderLab 靶场补充样式（Bootstrap 5 之上） */
 .lab-table code { white-space: nowrap; }
 .badge-lv .ico { vertical-align: -3px; }
 @media print { header.sl, footer.sl, .lab-note { display: none; } }
+
+/* ---- 媒体与文件靶站 ---- */
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+.shot { margin: 0; background: #fff; border: 1px solid var(--sl-line); }
+.shot a { display: block; }
+.shot img { display: block; width: 100%; height: 160px; object-fit: cover; }
+.shot figcaption { padding: 8px 10px; font-size: 12.5px; color: var(--sl-ink); }
+.shot figcaption span { display: block; color: var(--sl-muted); font-size: 11.5px; margin-top: 2px; }
+.photo-hero { height: 320px; background-size: cover; background-position: center;
+  border: 1px solid var(--sl-line); margin: 12px 0; }
+video { max-width: 100%; height: auto; background: #0b1220; border: 1px solid var(--sl-line); }
 """
 
 
@@ -151,6 +162,16 @@ def build_vue():
     for f in ASSETS.iterdir():
         if f.is_file():
             shutil.copy2(f, dst / 'assets' / f.name)
+
+    # 媒体与文件资源单独走 /media/：它们需要正确的 Content-Type（视频要支持
+    # Range 请求、PDF/ZIP 要能下载），混在 /assets/ 的长缓存规则里不好处理。
+    media_src = SERVER / 'media'
+    if media_src.is_dir():
+        shutil.copytree(media_src, dst / 'media', dirs_exist_ok=True)
+        n = sum(1 for p in (dst / 'media').iterdir() if p.is_file())
+        print('[media] media/ (%d files)' % n)
+    else:
+        print('[media] 跳过：server/media 不存在，需要时先跑 python prepare_media.py')
 
     # 主题层：SPA 打包进主 CSS，SSR 页单独引用这一份，保证两侧一致
     shutil.copy2(WEB / 'src' / 'theme.css', dst / 'assets' / 'theme.css')

@@ -30,7 +30,13 @@ files = [f for f in files if f]
 
 total = 0
 found = {}
+SKIP_EXT = {'.png', '.jpg', '.jpeg', '.gif', '.mp4', '.pdf', '.zip', '.gz',
+            '.wasm', '.whl', '.ico', '.woff', '.woff2', '.ttf'}
+
 for f in files:
+    # 二进制文件会匹配出无意义的乱码，跳过（它们本来也不该含密钥）
+    if f.lower().rsplit('.', 1)[-1] not in ('', ) and ('.' + f.lower().rsplit('.', 1)[-1]) in SKIP_EXT:
+        continue
     try:
         txt = open(f, encoding='utf-8', errors='ignore').read()
     except OSError:

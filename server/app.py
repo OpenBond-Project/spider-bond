@@ -6,6 +6,7 @@
 - /api/*           课程、靶站、关卡数据与判分接口
 - /robots.txt      明确允许抓取 /lab/
 """
+import atexit
 import html
 import json
 import mimetypes
@@ -27,7 +28,8 @@ from labs import (BASE, SITES, LEVELS, TASKS, ANSWERS,
                   BOOKS_PER_PAGE, QUOTES_PER_PAGE, API_PAGE_SIZE,
                   page_of_books, page_of_quotes,
                   VAULT_USER, VAULT_PASS, VAULT_SECRET, LAB_KEY,
-                  GUARD_TOKEN, REPORT_SECRET, REQUIRED_UA, REQUIRED_REFERER)
+                  GUARD_TOKEN, REPORT_SECRET, REQUIRED_UA, REQUIRED_REFERER,
+                  ROBOTS_DISALLOW)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, 'dist')
@@ -54,9 +56,10 @@ def icon(name, size=18):
 # 避免每个页面各写一套标签导致遗漏（这正是之前 og:title 全站缺失的原因）。
 SITE_NAME = 'Spider Bond'
 SITE_URL = 'https://spider.skkk.uno'
-SITE_DESC = ('部署在真实服务器上的 Python 爬虫实训平台：20 节系统课程、'
-             '11 个可合法抓取的示例靶站、五级 30 关在线训练场。'
-             '代码在浏览器沙箱内运行，提交即判分。')
+SITE_DESC = ('部署在真实服务器上的 Python 爬虫实训平台：%d 节系统课程、'
+             '%d 个可合法抓取的示例靶站、五级 %d 关在线训练场。'
+             '代码在浏览器沙箱内运行，提交即判分。'
+             % (len(COURSES), len(SITES), len(TASKS)))
 OG_IMAGE = '/assets/og-cover.png'
 
 
@@ -826,6 +829,140 @@ r = requests.get('%s/lab/guard', headers=headers)</code></pre>""" %
     return 200, lab_shell('请求头守卫', body, '示例靶站'), {}
 
 
+# ---------------------------------------------------------------- 靶场：媒体与文件
+# 这三个站是给「提取图片链接 / 抓视频源 / 下载文件」准备的实战素材。
+# 资源由 prepare_media.py 合成，全部虚构，不涉及任何版权素材或真实个人信息。
+GALLERY = [
+    ('海港晨雾', '港口在清晨的薄雾里苏醒'),
+    ('老街黄昏', '石板路被夕阳切成一段段暖色'),
+    ('山谷雨后', '云还没散，水汽挂在树梢'),
+    ('夜市灯河', '灯串连成一条流动的河'),
+    ('沙丘正午', '风把沙脊犁出细线'),
+    ('雪原破晓', '第一缕光落在雪面上'),
+]
+VIDEOS = [
+    ('clip-01', '城市延时 · 教学样例', 'testsrc2 合成素材'),
+    ('clip-02', '彩条测试片', 'smptebars 合成素材'),
+]
+FILES = [
+    ('crawler-handbook.pdf', '爬虫实训讲义', 'PDF', '练习二进制下载与 Content-Type 判断'),
+    ('books-export.csv', '书籍数据导出', 'CSV', '8 行数据，练习解析与行数统计'),
+    ('books-export.json', '书籍数据（JSON）', 'JSON', '同一份数据的结构化版本'),
+    ('datasets.zip', '数据集打包', 'ZIP', '练习下载压缩包并解包'),
+]
+
+
+def media_path(name):
+    """在 dist/media 与 server/media 两处找资源，取第一个存在的。"""
+    for base in (os.path.join(DIST, 'media'), os.path.join(ROOT, 'server', 'media')):
+        p = os.path.join(base, name)
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+def human_size(n):
+    if n < 1024:
+        return '%d B' % n
+    if n < 1048576:
+        return '%.1f KB' % (n / 1024.0)
+    return '%.1f MB' % (n / 1048576.0)
+
+
+def lab_gallery():
+    cards = ''
+    for i, (title, desc) in enumerate(GALLERY, 1):
+        cards += ("""<figure class="shot" data-id="%d" data-title="%s">
+<a href="/lab/gallery/%d">
+<img src="/media/thumb-%02d.jpg"
+     srcset="/media/photo-%02d-600.jpg 600w, /media/photo-%02d.jpg 1200w"
+     sizes="(max-width: 640px) 50vw, 240px" data-src="/media/photo-%02d.jpg"
+     width="240" height="160" loading="lazy" alt="%s">
+</a>
+<figcaption><b>%s</b><span>%s</span></figcaption></figure>""" %
+                  (i, E(title), i, i, i, i, i, E(title), E(title), E(desc)))
+    body = ("""<h1>图库</h1>
+<p class="text-muted">列表页给的是缩略图，原图地址藏在两个地方：<code>data-src</code>
+属性，以及 <code>srcset</code> 里 1200w 那一条。注意别把缩略图当原图下载。</p>
+<div class="shots">%s</div>
+<div class="lab-note">%s 图片均为程序合成，不含任何版权素材。</div>""" %
+            (cards, icon('info', 14)))
+    return lab_shell('图库 - 图片提取练习', body, '图库')
+
+
+def lab_gallery_item(idx):
+    if idx < 1 or idx > len(GALLERY):
+        return 404, lab_shell('照片不存在', '<h1>404</h1><p>没有这张照片。</p>')
+    title, desc = GALLERY[idx - 1]
+    body = ("""<h1>%s</h1>
+<p class="text-muted">%s</p>
+<div class="photo-hero" style="background-image:url('/media/photo-%02d.jpg')"></div>
+<p>上面这张大图是通过 <b>CSS 背景图</b>加载的：
+<code>style="background-image:url('/media/photo-%02d.jpg')"</code>。
+用 XPath 抓 <code>&lt;img&gt;</code> 是抓不到它的，得读 style 属性或者
+<code>data-bg</code>。</p>
+<p>原始文件：<a href="/media/photo-%02d.jpg">photo-%02d.jpg</a>
+（1200×800，%s）</p>
+<p class="mt-3"><a href="/lab/gallery">返回图库</a></p>""" %
+            (E(title), E(desc), idx, idx, idx, idx,
+             human_size(os.path.getsize(media_path('photo-%02d.jpg' % idx)))
+             if media_path('photo-%02d.jpg' % idx) else '未知'))
+    return 200, lab_shell('%s - 原图' % title, body, '图库')
+
+
+def lab_media():
+    blocks = ''
+    for name, title, note in VIDEOS:
+        mp4 = media_path('%s.mp4' % name)
+        size = human_size(os.path.getsize(mp4)) if mp4 else '未知'
+        blocks += ("""<div class="sl-card mb-3">
+<h2>%s</h2><p class="text-muted small">%s · %s</p>
+<video poster="/media/video-poster.jpg" controls preload="metadata"
+       width="640" height="360" data-src="/media/%s.mp4">
+<source src="/media/%s.mp4" type='video/mp4' data-quality="360p">
+<track kind="captions" src="/media/%s.vtt" srclang="zh" label="中文字幕" default>
+你的浏览器不支持 video 标签。<a href="/media/%s.mp4">直接下载</a>
+</video>
+<p class="small mt-2">源地址在 <code>&lt;source src&gt;</code> 里，
+<code>data-quality</code> 是额外标记。用 XPath 取
+<code>//video/source/@src</code> 即可。</p>
+<p class="small">直链：<a href="/media/%s.mp4">/media/%s.mp4</a>
+（%s，支持 Range 请求，可以用 <code>requests.get(url, headers={'Range': 'bytes=0-1023'})</code> 只取头部）</p>
+</div>""" % (E(title), E(note), E(size), name, name, name, name, name, name, E(size)))
+    body = ("""<h1>视频中心</h1>
+<p class="text-muted">页面里的视频用 <code>&lt;video&gt;</code> + 多个
+<code>&lt;source&gt;</code> 提供，封面是 poster 属性。抓视频地址要从
+<code>source</code> 的 <code>src</code> 取，别去猜文件名规律。</p>
+%s<div class="lab-note">%s 视频由 ffmpeg 合成，不含任何版权内容。</div>""" %
+            (blocks, icon('info', 14)))
+    return lab_shell('视频中心 - 媒体源提取练习', body, '视频')
+
+
+def lab_files():
+    rows = ''
+    for name, title, kind, note in FILES:
+        p = media_path(name)
+        size = human_size(os.path.getsize(p)) if p else '未知'
+        rows += ("""<tr><td><a href="/media/%s" download>%s</a></td>
+<td>%s</td><td>%s</td><td class="small text-muted">%s</td></tr>""" %
+                 (name, E(name), E(kind), size, E(note)))
+    body = ("""<h1>文件下载</h1>
+<p class="text-muted">练习文件下载时有两个坑：一是二进制内容不能用
+<code>r.text</code> 读（会破坏编码），二是响应头里的
+<code>Content-Type</code> 和 <code>Content-Disposition</code> 才是判断类型的依据，
+不要靠文件名后缀猜。</p>
+<table class="table table-bordered lab-table"><thead><tr>
+<th>文件</th><th>类型</th><th>大小</th><th>说明</th>
+</tr></thead><tbody>%s</tbody></table>
+<div class="callout">%s <b>提示：</b>用
+<code>requests.get(url)</code> 之后检查
+<code>r.headers['Content-Type']</code>，再按类型决定
+<code>r.content</code>（二进制）还是 <code>r.text</code>（文本）。
+CSV 是 UTF-8 with BOM，读的时候用 <code>encoding='utf-8-sig'</code>。</div>""" %
+            (rows, icon('lightbulb', 16)))
+    return lab_shell('文件下载 - 二进制与类型判断练习', body, '文件')
+
+
 # ---------------------------------------------------------------- 靶站索引
 def lab_index():
     cards = ''
@@ -1053,15 +1190,16 @@ def page_static(path):
 <p>市面上的爬虫教程有个通病：看懂之后会觉得「我会了」，但一动手写不出来。
 原因不在讲解，在于缺少一个「允许你随便抓」的练习对象——拿真实网站练手容易踩法律红线，
 也容易被封 IP。</p>
-<p>所以这里把练习对象自己造出来：11 个服务端渲染的靶站，结构稳定、字段语义清晰、
+<p>所以这里把练习对象自己造出来：14 个服务端渲染的靶站，结构稳定、字段语义清晰、
 robots.txt 明确允许抓取，数据全部虚构。你可以放心练 XPath、CSS 选择器、
 BeautifulSoup、requests 会话与请求头，不用担心越界。</p></div>
 
 <div class="sl-card"><h2>项目构成</h2>
 <ul>
 <li><b>20 节系统课程</b>：基础篇、解析篇、进阶篇、工程篇，从 robots.txt 合规底线到限速重试的工程收尾</li>
-<li><b>11 个示例靶站</b>：书城、名言墙、电影榜、商品库、招聘板、统计表、RSS、JSON 接口、登录保险库、请求头守卫</li>
-<li><b>30 关分级训练场</b>：五级难度，在线写代码直接打真实靶站，提交即判分</li>
+<li><b>14 个示例靶站</b>：书城、名言墙、电影榜、商品库、招聘板、统计表、RSS、
+JSON 接口、登录保险库、请求头守卫、图库、视频中心、文件下载</li>
+<li><b>33 关分级训练场</b>：五级难度，在线写代码直接打真实靶站，提交即判分</li>
 <li><b>浏览器内沙箱</b>：Python 运行时跑在 Web Worker 里，学员代码不进服务器进程</li>
 </ul></div>
 
@@ -1152,10 +1290,19 @@ localStorage 里，<b>不会上传到服务器</b>：</p>
 <div class="sl-card"><h2>四、广告</h2>
 %s</div>
 
-<div class="sl-card"><h2>五、服务器日志</h2>
-<p>为了排查故障和防御攻击，服务器会记录访问日志，包含 IP 地址、浏览器标识
-（User-Agent）、请求路径与时间。日志不用于用户画像，也从不与账号关联分析，
-按系统的日志轮转策略定期清除（通常保留两周左右）。</p></div>
+<div class="sl-card"><h2>五、访问日志与流量分析</h2>
+<p>为了解站点被如何使用、以及爬虫抓取是否符合约定，服务器会把每次页面请求
+记录到本站自己的数据库中，字段包括：</p>
+<ul>
+<li>访问时间、请求路径、HTTP 状态码</li>
+<li>IP 地址、User-Agent（浏览器或爬虫标识）、来源页</li>
+<li>由 User-Agent 推断的访问者类型（普通访客 / 搜索引擎 / AI 爬虫 / 脚本抓取等）</li>
+</ul>
+<p><b>这些数据只用于两件事</b>：观察站点访问情况，以及分析爬虫行为作为教学素材。
+不用于广告定向，不做用户画像，不与你的账号身份关联分析。
+静态资源与 Python 运行时的请求不记录。</p>
+<p>日志保留 <b>90 天</b>后自动删除。只有站点管理员可以查看汇总数据。
+本站不使用 Google Analytics、umami 等第三方统计服务，这些数据不会离开本服务器。</p></div>
 
 <div class="sl-card"><h2>六、第三方服务</h2>
 <table class="table table-bordered lab-table"><thead><tr>
@@ -1230,6 +1377,228 @@ localStorage 里，<b>不会上传到服务器</b>：</p>
         path='/compliance',
         extra_ld=ld_crumbs([('首页', '/'), ('合规说明', '/compliance')]),
     )
+
+
+# ---------------------------------------------------------------- 后台：流量分析
+# 服务器时区是 UTC，直接按 UTC 零点切"今日"会让统计错位 8 小时，
+# 所以统一按北京时间算日界。
+TZ_OFFSET = 8 * 3600
+
+
+def _day_start(ts=None):
+    ts = time.time() if ts is None else ts
+    return int((ts + TZ_OFFSET) // 86400 * 86400 - TZ_OFFSET)
+
+
+def admin_stats():
+    """聚合后台要用的全部数字。只读，一个连接内做完。"""
+    now = int(time.time())
+    d0 = _day_start(now)
+    w0 = d0 - 6 * 86400
+    out = {}
+    with db() as c:
+        c.row_factory = sqlite3.Row
+
+        def q(sql, args=()):
+            return [dict(r) for r in c.execute(sql, args)]
+
+        out['today'] = q("""
+            SELECT COUNT(*) AS pv,
+                   COALESCE(SUM(kind='human'), 0) AS human,
+                   COALESCE(SUM(kind!='human'), 0) AS bot,
+                   COUNT(DISTINCT CASE WHEN kind='human' THEN ip END) AS uv,
+                   COUNT(DISTINCT CASE WHEN kind!='human' THEN ip END) AS bot_ip
+              FROM hits WHERE ts >= ?""", (d0,))[0]
+
+        out['week'] = q("""
+            SELECT COUNT(*) AS pv,
+                   COALESCE(SUM(kind='human'), 0) AS human,
+                   COALESCE(SUM(kind!='human'), 0) AS bot,
+                   COUNT(DISTINCT ip) AS uv
+              FROM hits WHERE ts >= ?""", (w0,))[0]
+
+        out['total'] = q('SELECT COUNT(*) AS pv FROM hits')[0]
+
+        # 近 7 天按天聚合，缺的天补 0，否则柱状图会缺柱
+        raw = {r['d']: r for r in q("""
+            SELECT ((ts + ?) / 86400) AS d,
+                   SUM(kind='human') AS human,
+                   SUM(kind!='human') AS bot
+              FROM hits WHERE ts >= ?
+             GROUP BY d""", (TZ_OFFSET, w0))}
+        series = []
+        for i in range(7):
+            day_ts = w0 + i * 86400
+            key = (day_ts + TZ_OFFSET) // 86400
+            r = raw.get(key)
+            series.append({
+                # 用 gmtime 而不是 localtime：ts 已经手动加过 TZ_OFFSET，
+                # 再让 localtime 按本机时区转换一次就会双重偏移
+                # （在 UTC+8 的机器上会把 21:51 显示成次日 05:51）。
+                'date': time.strftime('%m-%d', time.gmtime(day_ts + TZ_OFFSET)),
+                'human': int(r['human'] or 0) if r else 0,
+                'bot': int(r['bot'] or 0) if r else 0,
+            })
+        out['series'] = series
+
+        out['paths'] = q("""
+            SELECT path, COUNT(*) AS n,
+                   COALESCE(SUM(kind!='human'), 0) AS bot
+              FROM hits WHERE ts >= ?
+             GROUP BY path ORDER BY n DESC LIMIT 15""", (w0,))
+
+        out['bots'] = q("""
+            SELECT COALESCE(NULLIF(bot,''), 'unknown') AS bot, kind,
+                   COUNT(*) AS n
+              FROM hits WHERE ts >= ? AND kind!='human'
+             GROUP BY bot, kind ORDER BY n DESC LIMIT 12""", (w0,))
+
+        out['kinds'] = q("""
+            SELECT kind, COUNT(*) AS n FROM hits WHERE ts >= ?
+             GROUP BY kind ORDER BY n DESC""", (w0,))
+
+        out['recent'] = q("""
+            SELECT ts, path, status, kind, bot, ua, ip, country
+              FROM hits ORDER BY id DESC LIMIT 30""")
+
+        out['status'] = q("""
+            SELECT status, COUNT(*) AS n FROM hits WHERE ts >= ?
+             GROUP BY status ORDER BY n DESC""", (w0,))
+    return out
+
+
+ADMIN_CSS = """
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:#fff;border:1px solid var(--sl-line);padding:14px 16px}
+.stat b{display:block;font-size:26px;line-height:1.2;color:var(--sl-blue);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--sl-muted)}
+.stat.bot b{color:var(--sl-orange)}
+.bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding:10px 0 0;border-bottom:1px solid var(--sl-line)}
+.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;text-align:center}
+.bar i{display:block;background:var(--sl-accent);min-height:2px}
+.bar u{display:block;background:#c2542f;min-height:2px;text-decoration:none}
+.bar em{display:block;font-size:11px;color:var(--sl-muted);margin-top:4px;font-style:normal}
+.legend{font-size:12px;color:var(--sl-muted);margin-top:8px}
+.legend s{display:inline-block;width:9px;height:9px;margin-right:4px;vertical-align:middle}
+.mini{font-size:12.5px}
+.mono-cell{font-family:var(--sl-mono);font-size:12px}
+"""
+
+
+def page_admin(me):
+    """后台首页。只有 ADMIN_GIDS 里的人能看到。"""
+    s = admin_stats()
+    t = s['today'] or {}
+    w = s['week'] or {}
+
+    def card(label, value, cls=''):
+        return ('<div class="stat %s"><b>%s</b><span>%s</span></div>'
+                % (cls, E('{:,}'.format(int(value or 0))), E(label)))
+
+    grid = ''.join([
+        card('今日 PV', t.get('pv')),
+        card('今日访客', t.get('uv')),
+        card('今日爬虫请求', t.get('bot'), 'bot'),
+        card('7 日 PV', w.get('pv')),
+        card('7 日访客', w.get('uv')),
+        card('累计记录', (s['total'] or {}).get('pv')),
+    ])
+
+    # 柱状图：两段堆叠，蓝=人类、橙=爬虫
+    peak = max([x['human'] + x['bot'] for x in s['series']] or [1]) or 1
+    bars = ''
+    for x in s['series']:
+        tot = x['human'] + x['bot']
+        hh = x['human'] / peak * 100
+        hb = x['bot'] / peak * 100
+        bars += ('<div class="bar" title="%s 人类 %d / 爬虫 %d">'
+                 '<i style="height:%.1f%%"></i><u style="height:%.1f%%"></u>'
+                 '<em>%s</em></div>'
+                 % (x['date'], x['human'], x['bot'], hh, hb, x['date']))
+
+    def rows(data, cols, fmt=None):
+        if not data:
+            return '<tr><td colspan="%d" class="text-muted">暂无数据</td></tr>' % len(cols)
+        html_rows = ''
+        for r in data:
+            cells = ''.join('<td>%s</td>' % (fmt(c, r) if fmt else E(str(r.get(c, ''))))
+                            for c in cols)
+            html_rows += '<tr>%s</tr>' % cells
+        return html_rows
+
+    path_rows = rows(s['paths'], ['path', 'n', 'bot'],
+                     lambda c, r: E(str(r['path'])) if c == 'path'
+                     else '{:,}'.format(int(r[c] or 0)))
+
+    KIND_LABEL = {'human': '普通访客', 'search': '搜索引擎', 'ai': 'AI 爬虫',
+                  'seo': 'SEO 工具', 'script': '脚本抓取', 'monitor': '可用性监控',
+                  'other': '其他 / 空 UA'}
+    kind_rows = ''.join(
+        '<tr><td>%s</td><td>%s</td></tr>'
+        % (E(KIND_LABEL.get(r['kind'], r['kind'])), '{:,}'.format(int(r['n'])))
+        for r in s['kinds']) or '<tr><td colspan="2" class="text-muted">暂无数据</td></tr>'
+
+    bot_rows = ''.join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td></tr>'
+        % (E(r['bot']), E(KIND_LABEL.get(r['kind'], r['kind'])),
+           '{:,}'.format(int(r['n'])))
+        for r in s['bots']) or '<tr><td colspan="3" class="text-muted">暂无爬虫记录</td></tr>'
+
+    recent_rows = ''
+    for r in s['recent']:
+        ts = time.strftime('%m-%d %H:%M:%S',
+                           time.gmtime(int(r['ts']) + TZ_OFFSET))
+        ua = (r['ua'] or '')[:52]
+        recent_rows += (
+            '<tr><td class="mono-cell">%s</td><td class="mono-cell">%s</td>'
+            '<td>%s</td><td>%s</td><td class="mono-cell">%s</td><td class="mono-cell">%s</td></tr>'
+            % (E(ts), E(r['path']), int(r['status'] or 0),
+               E(KIND_LABEL.get(r['kind'], r['kind'])),
+               E(r['bot'] or '-'), E(ua)))
+
+    body = ("""<h1>流量分析</h1>
+<p class="text-muted">统计包含爬虫。静态资源与 Pyodide 运行时的请求不计入，
+数据保留 %d 天。当前身份：<b>%s</b></p>
+
+<div class="stat-grid">%s</div>
+
+<div class="sl-card mt-3"><h2>近 7 天</h2>
+<div class="bars">%s</div>
+<div class="legend"><s style="background:#1a67c2"></s>普通访客
+<s style="background:#c2542f;margin-left:12px"></s>爬虫 / 脚本</div></div>
+
+<div class="row mt-3">
+<div class="col-lg-7"><div class="sl-card h-100"><h2>热门页面（7 日）</h2>
+<table class="table table-sm lab-table mini"><thead><tr>
+<th>路径</th><th>请求</th><th>其中爬虫</th></tr></thead><tbody>%s</tbody></table></div></div>
+<div class="col-lg-5"><div class="sl-card h-100"><h2>访问者构成（7 日）</h2>
+<table class="table table-sm lab-table mini"><thead><tr>
+<th>类型</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div></div>
+</div>
+
+<div class="sl-card mt-3"><h2>爬虫排行（7 日）</h2>
+<table class="table table-sm lab-table mini"><thead><tr>
+<th>爬虫</th><th>类型</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div>
+
+<div class="sl-card mt-3"><h2>最近 30 条请求</h2>
+<div style="overflow-x:auto"><table class="table table-sm lab-table mini"><thead><tr>
+<th>时间</th><th>路径</th><th>码</th><th>类型</th><th>爬虫</th><th>User-Agent</th>
+</tr></thead><tbody>%s</tbody></table></div></div>""" %
+            (HITS_KEEP_DAYS, E(me.get('login') or me.get('name') or ''),
+             grid, bars, path_rows, kind_rows, bot_rows, recent_rows))
+
+    return shell(
+        '流量分析（后台）',
+        body, '', 'Spider Bond 站点流量分析后台。',
+        path='/admin', noindex=True, inline_css=ADMIN_CSS,
+        extra_ld='',
+    )
+
+
+def page_admin_denied(reason):
+    body = ('<h1>后台</h1><div class="callout no">%s</div>'
+            '<p><a href="/">返回首页</a></p>' % E(reason))
+    return shell('后台', body, '', '后台入口。', path='/admin', noindex=True)
 
 
 # ---------------------------------------------------------------- 判分
@@ -1355,15 +1724,13 @@ def case_public(c):
 
 
 # ---------------------------------------------------------------- robots / sitemap
-ROBOTS = """# Spider Bond 教学靶场 robots.txt
+ROBOTS = ("""# Spider Bond 教学靶场 robots.txt
 # 本文件是第 1 课「合规底线」的实练素材。
 User-agent: *
 Allow: /
-Disallow: /api/check
-Disallow: /api/check_case
-Disallow: /lab/trap/
-Disallow: /admin/
-Disallow: /auth/
+"""
+          + ''.join('Disallow: %s\n' % p for p in ROBOTS_DISALLOW)
+          + """
 Crawl-delay: 0.5
 
 User-agent: SpiderBond-Student
@@ -1371,7 +1738,7 @@ Allow: /lab/
 Crawl-delay: 0.5
 
 Sitemap: %s/sitemap.xml
-""" % BASE
+""" % BASE)
 
 # AdSense 授权文件（/ads.txt）。Google 会定期抓取它，核对本站是否授权 google.com
 # 售卖广告位。格式是固定的四段式，必须以换行结尾、不能有 BOM 或注释，
@@ -1539,9 +1906,157 @@ CREATE INDEX IF NOT EXISTS idx_events_gid ON events(gid, ts);
 CREATE TABLE IF NOT EXISTS study(
   gid TEXT NOT NULL, day TEXT NOT NULL, seconds INTEGER DEFAULT 0,
   PRIMARY KEY(gid, day));
+CREATE TABLE IF NOT EXISTS hits(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  method TEXT,
+  status INTEGER,
+  ua TEXT,
+  ip TEXT,
+  ref TEXT,
+  kind TEXT,
+  bot TEXT,
+  country TEXT);
+CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits(ts);
+CREATE INDEX IF NOT EXISTS idx_hits_kind_ts ON hits(kind, ts);
 """)
     except Exception as ex:
         print('数据库初始化失败：%s' % ex, flush=True)
+
+
+# ---------------------------------------------------------------- 访问统计
+# 自建轻量分析。之所以不用 umami / Plausible 这类现成工具，是因为它们默认把爬虫
+# 排除在统计之外——而本站要看的恰恰是"谁在抓、抓得对不对"，爬虫流量正是教学内容。
+#
+# 写入走内存缓冲 + 后台线程批量落库：每来一个请求都开一次 SQLite 连接，
+# 在靶站被高频抓取时会把 CPU 吃光，反而拖慢被观察的对象。
+ADMIN_GIDS = {g.strip() for g in
+              (os.environ.get('SPIDERLAB_ADMIN_GIDS') or '184600734').split(',')
+              if g.strip()}
+
+# (分类, 名称, 正则)。顺序有意义：先匹配到的先赢。
+BOT_RULES = [
+    ('search', 'Googlebot', r'Googlebot'),
+    ('search', 'bingbot', r'bingbot'),
+    ('search', 'Baiduspider', r'Baiduspider'),
+    ('search', 'YandexBot', r'YandexBot'),
+    ('search', 'DuckDuckBot', r'DuckDuckBot'),
+    ('search', 'Applebot', r'Applebot'),
+    ('search', 'Sogou', r'Sogou web spider|Sogouspider'),
+    ('search', '360Spider', r'360Spider|HaosouSpider'),
+    ('search', 'PetalBot', r'PetalBot'),
+    ('search', 'SeznamBot', r'SeznamBot'),
+    ('search', 'Naver', r'Yeti/'),
+    ('ai', 'GPTBot', r'GPTBot'),
+    ('ai', 'ClaudeBot', r'ClaudeBot|anthropic-ai'),
+    ('ai', 'PerplexityBot', r'PerplexityBot'),
+    ('ai', 'CCBot', r'CCBot'),
+    ('ai', 'Bytespider', r'Bytespider'),
+    ('ai', 'Google-Extended', r'Google-Extended'),
+    ('ai', 'Amazonbot', r'Amazonbot'),
+    ('seo', 'SemrushBot', r'SemrushBot'),
+    ('seo', 'AhrefsBot', r'AhrefsBot'),
+    ('seo', 'MJ12bot', r'MJ12bot'),
+    ('script', 'python-requests', r'python-requests|requests/'),
+    ('script', 'python-urllib', r'Python-urllib|python-urllib'),
+    ('script', 'Scrapy', r'Scrapy/'),
+    ('script', 'curl', r'^curl/'),
+    ('script', 'wget', r'^Wget/'),
+    ('script', 'Go-http-client', r'Go-http-client'),
+    ('script', 'aiohttp/httpx', r'aiohttp|httpx'),
+    ('script', 'node-fetch/axios', r'node-fetch|axios|okhttp'),
+    ('monitor', 'UptimeRobot', r'UptimeRobot'),
+    ('monitor', 'Pingdom', r'Pingdom'),
+    ('monitor', 'StatusCake', r'StatusCake'),
+]
+_BOT_COMPILED = [(k, n, re.compile(p, re.I)) for k, n, p in BOT_RULES]
+
+# 这些路径不值得进统计：静态资源由 Nginx 直接服务，根本到不了这里；
+# 漏过来的是 SPA 的 JS/CSS 请求，量极大且没有分析价值。
+_SKIP_STAT_PREFIX = ('/assets/', '/pyodide/')
+
+
+def classify_ua(ua):
+    """返回 (kind, bot_name)。kind 取 human / search / ai / seo / script / monitor / other。"""
+    ua = ua or ''
+    for kind, name, pat in _BOT_COMPILED:
+        if pat.search(ua):
+            return kind, name
+    if not ua.strip():
+        return 'other', ''
+    if re.search(r'Mozilla/5\.0.*(Chrome|Firefox|Safari|Edg/|OPR/)', ua):
+        return 'human', ''
+    return 'other', ''
+
+
+_hits_buf = []
+_hits_lock = threading.Lock()
+HITS_FLUSH_AT = 200
+HITS_KEEP_DAYS = 90
+
+
+def _flush_hits_locked():
+    """把缓冲写入数据库。调用方必须已持有 _hits_lock。"""
+    if not _hits_buf:
+        return
+    rows = _hits_buf[:]
+    _hits_buf.clear()
+    try:
+        with db() as c:
+            c.executemany(
+                'INSERT INTO hits(ts, path, method, status, ua, ip, ref, kind, bot, country)'
+                ' VALUES(?,?,?,?,?,?,?,?,?,?)', rows)
+    except Exception:
+        # 统计失败绝不能影响正常请求，丢失一批数据是可接受的代价
+        pass
+
+
+def flush_hits():
+    with _hits_lock:
+        _flush_hits_locked()
+
+
+def record_hit(handler, status):
+    """记录一次页面请求。由 _send 调用，所以 404 / 403 也会被统计到。"""
+    try:
+        path = urlparse(handler.path).path
+        if path.startswith(_SKIP_STAT_PREFIX):
+            return
+        h = handler.headers
+        ua = h.get('User-Agent', '')[:300]
+        kind, bot = classify_ua(ua)
+        row = (
+            int(time.time()), path[:300], handler.command,
+            int(status), ua,
+            (handler.client_address[0] if handler.client_address else '')[:64],
+            (h.get('Referer', '') or '')[:300],
+            kind, bot,
+            (h.get('CF-IPCountry', '') or '')[:8],
+        )
+        with _hits_lock:
+            _hits_buf.append(row)
+            if len(_hits_buf) >= HITS_FLUSH_AT:
+                _flush_hits_locked()
+    except Exception:
+        pass
+
+
+def _hits_flusher():
+    """后台定时落库，避免低流量时数据一直留在内存里。"""
+    while True:
+        time.sleep(5)
+        flush_hits()
+
+
+def prune_hits():
+    """只保留最近 N 天，防止表无限膨胀。"""
+    cutoff = int(time.time()) - HITS_KEEP_DAYS * 86400
+    try:
+        with db() as c:
+            c.execute('DELETE FROM hits WHERE ts < ?', (cutoff,))
+    except Exception:
+        pass
 
 
 def gh_authorize_url(state):
@@ -1635,6 +2150,8 @@ class Handler(BaseHTTPRequestHandler):
         for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
+        # 统计放在响应头发出之后：即使记录失败也不影响用户拿到页面
+        record_hit(self, code)
         try:
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
@@ -1674,7 +2191,9 @@ class Handler(BaseHTTPRequestHandler):
                       os.path.join(DIST, name),
                       # Pyodide 运行时。线上由 Nginx 的 /pyodide/ 直接服务，
                       # 这里兜底是为了本地跑起来不依赖 Nginx（否则沙箱 404）。
-                      os.path.join(DIST, 'pyodide', name)]
+                      os.path.join(DIST, 'pyodide', name),
+                      # 媒体与文件靶站资源，同理兜底
+                      os.path.join(DIST, 'media', name)]
         for fp in candidates:
             if os.path.isfile(fp):
                 ctype = mimetypes.guess_type(fp)[0] or 'application/octet-stream'
@@ -1693,6 +2212,20 @@ class Handler(BaseHTTPRequestHandler):
                     ctype = 'application/zip'
                 elif fp.endswith('.json'):
                     ctype = 'application/json; charset=utf-8'
+                # 媒体资源显式指定：mimetypes 依赖系统注册表，Windows 上
+                # .mp4 / .csv 有时会猜成 octet-stream，练习下载时类型判断就错了
+                elif fp.endswith('.mp4'):
+                    ctype = 'video/mp4'
+                elif fp.endswith('.jpg') or fp.endswith('.jpeg'):
+                    ctype = 'image/jpeg'
+                elif fp.endswith('.png'):
+                    ctype = 'image/png'
+                elif fp.endswith('.pdf'):
+                    ctype = 'application/pdf'
+                elif fp.endswith('.csv'):
+                    ctype = 'text/csv; charset=utf-8'
+                elif fp.endswith('.vtt'):
+                    ctype = 'text/vtt; charset=utf-8'
                 with open(fp, 'rb') as f:
                     self._send(200, f.read(), ctype)
                 return True
@@ -1745,6 +2278,7 @@ class Handler(BaseHTTPRequestHandler):
                                   'application/rss+xml; charset=utf-8')
 
             if (p.startswith('/assets/') or p.startswith('/pyodide/')
+                    or p.startswith('/media/')
                     or p in ('/favicon.svg', '/favicon.ico')):
                 if self._static(p):
                     return
@@ -1768,6 +2302,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200 if tid in TASKS else 404, page_task(tid))
             if p in ('/about', '/compliance', '/privacy'):
                 return self._send(200, page_static(p))
+            if p == '/admin':
+                me = self._me()
+                if not me:
+                    return self._send(200, page_admin_denied(
+                        '请先用 GitHub 登录，再访问后台。'))
+                if str(me.get('gid') or '') not in ADMIN_GIDS:
+                    # 非管理员返回 403，且页面本身 noindex——不要给搜索引擎任何线索
+                    return self._send(403, page_admin_denied(
+                        '当前账号（%s）没有后台权限。' % (me.get('login') or '未命名')))
+                return self._send(200, page_admin(me))
 
             # ---- JSON API（内容类） ----
             if p == '/api/courses':
@@ -1884,6 +2428,20 @@ class Handler(BaseHTTPRequestHandler):
             if p == '/lab/books':
                 page = max(1, int(qs.get('page', ['1'])[0]))
                 return self._send(200, lab_books(page))
+            # ---- 媒体与文件三站 ----
+            if p == '/lab/gallery':
+                return self._send(200, lab_gallery())
+            if p.startswith('/lab/gallery/'):
+                try:
+                    _idx = int(p.rsplit('/', 1)[-1])
+                except ValueError:
+                    _idx = 0
+                _code, _html = lab_gallery_item(_idx)
+                return self._send(_code, _html)
+            if p == '/lab/media':
+                return self._send(200, lab_media())
+            if p == '/lab/files':
+                return self._send(200, lab_files())
             m = re.match(r'^/lab/books/(\d+)$', p)
             if m:
                 code, body = lab_book_detail(int(m.group(1)))
@@ -2069,5 +2627,10 @@ if __name__ == '__main__':
     port = int(os.environ.get('SPIDERLAB_PORT', '8080'))
     srv = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     srv.daemon_threads = True
+    # 访问统计：后台定时把内存缓冲写进数据库；退出前再补一次，避免丢尾巴
+    threading.Thread(target=_hits_flusher, daemon=True).start()
+    atexit.register(flush_hits)
+    threading.Thread(target=lambda: (prune_hits(),),
+                     daemon=True).start()
     print('Spider Bond listening on 0.0.0.0:%d' % port, flush=True)
     srv.serve_forever()

@@ -9,7 +9,7 @@
  *  4) 每次运行使用全新 globals dict，stdout 截断 8KB。
  */
 
-const ALLOWED_PATHS = ['/lab/', '/assets/', '/robots.txt', '/sitemap.xml']
+const ALLOWED_PATHS = ['/lab/', '/assets/', '/media/', '/robots.txt', '/sitemap.xml']
 const HEADER_ALIAS = {
   'Referer': 'X-Sl-Referer',
   'Cookie': 'X-Sl-Cookie',
@@ -40,7 +40,7 @@ function checkUrl(raw) {
   }
   const p = u.pathname
   if (!ALLOWED_PATHS.some((x) => p === x || p.startsWith(x))) {
-    throw new Error('安全限制：路径 ' + p + ' 不在允许范围（仅 /lab/、/robots.txt、/sitemap.xml、/assets/）')
+    throw new Error('安全限制：路径 ' + p + ' 不在允许范围（仅 /lab/、/media/、/robots.txt、/sitemap.xml、/assets/）')
   }
   // PAC 兜底；顺带 Ru 掉可能的 URL 里混进的 scheme 外链
   return u

@@ -1,0 +1,9 @@
+﻿id,title,author,publisher,price,rating
+1,深入理解计算机系统,Randal Bryant,机械工业出版社,139.00,9.2
+2,Python 编程：从入门到实践,Eric Matthes,人民邮电出版社,89.80,9.0
+3,数据密集型应用系统设计,Martin Kleppmann,中国电力出版社,128.00,9.4
+4,HTTP 权威指南,David Gourley,人民邮电出版社,109.00,8.8
+5,流畅的 Python,Luciano Ramalho,人民邮电出版社,139.00,9.1
+6,算法（第 4 版）,Robert Sedgewick,人民邮电出版社,99.00,9.3
+7,计算机网络：自顶向下方法,James Kurose,机械工业出版社,89.00,9.2
+8,重构：改善既有代码的设计,Martin Fowler,人民邮电出版社,118.00,9.1

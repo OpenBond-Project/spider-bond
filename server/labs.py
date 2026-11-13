@@ -4,6 +4,7 @@
 所有 /lab/ 页面均为教学用途，已在 robots.txt 中明确 Allow。
 标准答案由数据实时推导，避免答案与靶场数据不一致。
 """
+import os
 from urllib.parse import urlencode
 
 BASE = 'https://spider.skkk.uno'   # 学员侧基准地址：用域名，避免暴露源站 IP
@@ -150,6 +151,11 @@ STATS_ROWS = [
 ]
 
 # ---------------------------------------------------------------- 示例靶站清单
+# robots.txt 里禁止抓取的路径。这里是唯一真相源：
+# 靶站真实返回的 robots、第 1 课案例的判分答案都从它推导。
+# 之前这两处各写一份，改了一处忘另一处，导致学员答对了却被判错。
+ROBOTS_DISALLOW = ['/api/check', '/api/check_case', '/lab/trap/', '/admin', '/auth/']
+
 SITES = [
     {'path': '/lab/books', 'name': '书城', 'tech': '静态 HTML / 分页 / 详情页',
      'level': 'L1-L2', 'learn': 'requests + 选择器 + urljoin',
@@ -184,6 +190,18 @@ SITES = [
     {'path': '/lab/api', 'name': 'JSON 接口', 'tech': 'AJAX / 自定义请求头 / 分页',
      'level': 'L4', 'learn': 'JSON 解析 + has_next 翻页 + 字段清洗',
      'desc': '模拟前后端分离站点：/lab/api/v1/items 返回 JSON，需要 X-Lab-Key 请求头。'},
+    {'path': '/lab/gallery', 'name': '图库', 'tech': 'img / srcset / data-* / CSS 背景图',
+     'level': 'L2-L3', 'learn': '属性提取 + srcset 解析 + 背景图地址',
+     'desc': '缩略图与原图分离：原图地址藏在 data-src 和 srcset 的 1200w 里，'
+             '详情页的大图是 CSS 背景图，用 img 选择器抓不到。'},
+    {'path': '/lab/media', 'name': '视频中心', 'tech': 'video / source / poster / Range',
+     'level': 'L3', 'learn': '媒体源提取 + Range 请求',
+     'desc': '两段合成视频，地址在 source 的 src 上；支持 Range 请求，'
+             '可以练习只取文件头部而不下载整段。'},
+    {'path': '/lab/files', 'name': '文件下载', 'tech': 'Content-Type / 二进制 / ZIP',
+     'level': 'L3', 'learn': '响应头判断 + 二进制落盘',
+     'desc': 'PDF / CSV / JSON / ZIP 四种文件，练习按 Content-Type 判断类型、'
+             '用 content 而不是 text 保存二进制。'},
 ]
 
 # ---------------------------------------------------------------- 五级训练场
@@ -198,12 +216,12 @@ LEVELS = [
      'desc': '要写 for 循环、urljoin 拼链接、条件筛选与去重。',
      'need': '会循环、会类型转换、会 urljoin',
      'skills': ['分页循环', '条件筛选', '表格解析', 'urljoin', '去重'],
-     'courses': ['7', '8', '9', '12'], 'tasks': ['L2-1', 'L2-2', 'L2-3', 'L2-4', 'L2-5', 'L2-6']},
+     'courses': ['7', '8', '9', '12'], 'tasks': ['L2-1', 'L2-2', 'L2-3', 'L2-4', 'L2-5', 'L2-6', 'L2-7']},
     {'code': 'L3', 'name': '身份与会话', 'badge': '进阶', 'color': 'warning',
      'desc': '要传自定义请求头、提交表单、用 Session 保持 Cookie。请求头只是多传一个字典。',
      'need': '会读接口说明、会 POST、会用 Session',
      'skills': ['自定义请求头', 'POST 表单', 'Session/Cookie', '状态码处理'],
-     'courses': ['13', '14'], 'tasks': ['L3-1', 'L3-2', 'L3-3', 'L3-4', 'L3-5', 'L3-6']},
+     'courses': ['13', '14'], 'tasks': ['L3-1', 'L3-2', 'L3-3', 'L3-4', 'L3-5', 'L3-6', 'L3-7', 'L3-8']},
     {'code': 'L4', 'name': '接口与结构', 'badge': '高阶', 'color': 'danger',
      'desc': '要读 JSON 分页字段、清洗类型、处理 data-* 与蜜罐，比 L3 多一层数据加工。',
      'need': '会 JSON 翻页、会字段清洗、会识别蜜罐',
@@ -387,6 +405,15 @@ TASKS.update({
                 '就天然排除了 tfoot，不用额外判断。',
         'skills': ['表格解析', 'XPath 轴', '陷阱识别']},
 
+    'L2-7': {'title': '图库的原图地址', 'level': 'L2', 'points': 25,
+        'goal': '图库列表页显示的是缩略图，原图另有地址。提取全部 6 张原图的完整路径，'
+                '按页面顺序用英文逗号分隔提交。',
+        'target': '/lab/gallery', 'target_text': '图库',
+        'format': '英文逗号分隔的有序列表，例如：/media/a.jpg,/media/b.jpg', 'type': 'olist',
+        'hint': '缩略图在 src 属性，原图在 data-src；srcset 里 "1200w" 那一条也是原图。'
+                'XPath: //figure/img/@data-src',
+        'skills': ['属性提取', 'srcset', 'data-* 属性']},
+
     'L3-5': {'title': '关闭自动跳转看 302', 'level': 'L3', 'points': 25,
         'goal': 'requests 默认会自动跟随 302，所以你看不到跳转本身。关闭自动跳转后 POST 登录，'
                 '提交响应头 Location 里的路径。',
@@ -404,6 +431,22 @@ TASKS.update({
         'hint': 'Set-Cookie 形如 lab_session=ok; Path=/; HttpOnly，取第一个分号前的 key=value；'
                 '请求时 headers={"Cookie": "lab_session=ok"}。',
         'skills': ['Cookie 管理', '响应头解析', '会话保持']},
+
+    'L3-7': {'title': '抓出视频直链', 'level': 'L3', 'points': 25,
+        'goal': '视频中心第一段视频的主源是一个 mp4 直链。提取它的路径（以 / 开头）提交。',
+        'target': '/lab/media', 'target_text': '视频中心',
+        'format': '一个以 / 开头的路径，例如 /media/xxx.mp4', 'type': 'text',
+        'hint': '地址在 <video> 内部的 <source src="..."> 上，不在 video 标签自身。'
+                'XPath: (//video/source/@src)[1]',
+        'skills': ['媒体源提取', 'source 标签', 'XPath 索引']},
+
+    'L3-8': {'title': '下载 CSV 并数行数', 'level': 'L3', 'points': 25,
+        'goal': '文件下载页提供了一个 CSV。下载它，统计除表头之外有多少行数据，提交这个数字。',
+        'target': '/media/books-export.csv', 'target_text': 'CSV 数据集',
+        'format': '一个整数', 'type': 'number',
+        'hint': 'r = requests.get(url)；行数 = len(r.text.strip().splitlines()) - 1。'
+                '文件是 UTF-8 with BOM，用 r.text 读不影响行数统计。',
+        'skills': ['文件下载', '文本解析', '行数统计']},
 
     'L4-5': {'title': '解析 RSS 订阅源', 'level': 'L4', 'points': 30,
         'goal': '订阅源是 RSS 2.0（XML）格式，日期字段带 dc: 命名空间前缀。'
@@ -675,7 +718,24 @@ def compute_answers():
             [{'name': b['title'], 'price': b['price']} for b in p1]
             + [{'name': p['name'], 'price': p['price']} for p in PRODUCTS],
             key=lambda x: x['price'], reverse=True)][:3],
+        # ---- 媒体与文件关卡 ----
+        'L2-7': ['/media/photo-%02d.jpg' % i for i in range(1, 7)],
+        'L3-7': '/media/clip-01.mp4',
+        # CSV 行数从实际文件推导，避免改了数据集忘记同步答案
+        'L3-8': media_csv_rows(),
     }
+
+
+def media_csv_rows():
+    """books-export.csv 的数据行数（不含表头）。文件缺失时退回当前已知值。"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        'media', 'books-export.csv')
+    try:
+        with open(path, encoding='utf-8-sig') as f:
+            lines = [x for x in f.read().strip().splitlines() if x.strip()]
+        return max(0, len(lines) - 1)
+    except OSError:
+        return 8
 
 
 ANSWERS = compute_answers()

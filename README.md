@@ -1,6 +1,6 @@
 # Spider Bond
 
-部署在真实服务器上的 Python 爬虫实训平台。**20 节系统课程 · 11 个可合法抓取的示例靶站 · 30 关在线实战**。
+部署在真实服务器上的 Python 爬虫实训平台。**20 节系统课程 · 14 个可合法抓取的示例靶站 · 33 关在线实战**。
 
 在线体验：<https://spider.skkk.uno>
 
@@ -8,7 +8,7 @@
 
 学爬虫最大的障碍不是听不懂，是**没有能合法练手的对象**——拿真实网站练容易踩法律红线，也容易封 IP。
 
-所以这个项目把练习对象自己造出来：11 个服务端渲染的靶站，结构稳定、字段语义清晰、`robots.txt` 明确允许抓取，数据全部虚构。你可以放心练 XPath、CSS 选择器、BeautifulSoup、requests 会话与请求头。
+所以这个项目把练习对象自己造出来：14 个服务端渲染的靶站，结构稳定、字段语义清晰、`robots.txt` 明确允许抓取，数据全部虚构。你可以放心练 XPath、CSS 选择器、BeautifulSoup、requests 会话与请求头。
 
 课程按「要写多少代码」分级，而不是按名词听起来高不高级——传一个请求头只是多一个字典，它就属于入门之后的第一层。
 
@@ -16,6 +16,8 @@
 
 - **在线沙箱**：Python 运行时跑在浏览器 Web Worker 里（Pyodide），学员代码不进入服务器进程，网络只允许访问本站 `/lab/` 靶场
 - **提交即判分**：答案只在后端，代码运行结果提交比对，前端拿不到标准答案
+- **媒体与文件实训**：图库练 `srcset` / `data-src` / CSS 背景图；视频页练 `<source>` 与 Range 请求；文件页练 Content-Type 判断与二进制落盘
+- **流量分析后台**：自建统计，能区分搜索引擎、AI 爬虫、SEO 工具、脚本抓取与普通访客——这类数据在 umami 一类工具里默认被过滤掉
 - **可续写代码**：每个案例和关卡各自的草稿存本地，刷新不丢
 - **学习记录**：类 GitHub 的贡献日历、分级进度、连续天数；可选 GitHub 登录跨设备同步
 - **全站响应式**：日间 / 夜间双主题，移动端可用
@@ -75,10 +77,11 @@ cp .env.example .env.local   # 填入你的服务器地址
 server/
   app.py            HTTP 服务、路由、SSR 页面、判分、账号
   courses.py        20 节课程的正文与代码
-  labs.py           11 个靶站的数据、30 个关卡与答案
+  labs.py           14 个靶站的数据、33 个关卡与答案
   cases.py          课程内嵌的可运行案例
   enrich.py         课程内容的补充章节
   assets/           图标 sprite、站点 logo、社交分享图
+  media/            靶站用的图片 / 视频 / PDF / CSV（由 prepare_media.py 生成）
   deploy/           Nginx 配置模板、证书脚本、systemd unit
 web/
   src/App.vue       主应用与各视图
@@ -86,8 +89,21 @@ web/
   src/Profile.vue   学习记录页
   src/theme.css     主题变量与暗色覆盖
 build.py            构建脚本
+prepare_media.py    生成靶站媒体资源（图片 / 视频 / PDF / CSV）
 sl.sh               服务器运维
 ```
+
+## 流量后台
+
+访问 `/admin`，需先用 GitHub 登录，且账号在管理员白名单里：
+
+```bash
+SPIDERLAB_ADMIN_GIDS=123456,789012   # 逗号分隔的 GitHub 用户 ID
+```
+
+未设置时默认只放行仓库作者（见 `server/app.py` 的 `ADMIN_GIDS`）。
+统计写入 SQLite 的 `hits` 表，内存缓冲 + 后台线程批量落库，保留 90 天。
+静态资源与 Pyodide 运行时的请求不计入。
 
 ## 配置
 
