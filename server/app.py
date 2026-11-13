@@ -407,6 +407,11 @@ def shell(title, body, active='', desc='', inline_css='',
     links = ''.join(
         '<a class="lk %s" href="%s">%s</a>' %
         ('on' if active == k else '', u, t) for u, t, k in navs)
+    # 后台入口只对管理员渲染进 HTML。非管理员的响应里没有这个链接，
+    # 不是用 CSS 藏起来——藏起来等于把地址告诉所有人。
+    if cur_is_admin():
+        links += ('<a class="lk %s" href="/admin">后台</a>'
+                  % ('on' if active == 'admin' else ''))
     return ("""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1545,7 +1550,7 @@ def _day_start(ts=None):
     return int((ts + TZ_OFFSET) // 86400 * 86400 - TZ_OFFSET)
 
 
-def admin_stats():
+def admin_stats(qs_page='1'):
     """聚合后台要用的全部数字。只读，一个连接内做完。"""
     now = int(time.time())
     d0 = _day_start(now)
@@ -1612,13 +1617,66 @@ def admin_stats():
             SELECT kind, COUNT(*) AS n FROM hits WHERE ts >= ?
              GROUP BY kind ORDER BY n DESC""", (w0,))
 
-        out['recent'] = q("""
-            SELECT ts, path, status, kind, bot, ua, ip, country
-              FROM hits ORDER BY id DESC LIMIT 30""")
-
         out['status'] = q("""
             SELECT status, COUNT(*) AS n FROM hits WHERE ts >= ?
              GROUP BY status ORDER BY n DESC""", (w0,))
+
+        # ---- 30 天趋势（折线图），缺的天补 0，否则线会断 ----
+        d30 = d0 - 29 * 86400
+        raw30 = {r['d']: r for r in q("""
+            SELECT ((ts + ?) / 86400) AS d,
+                   SUM(kind='human') AS human,
+                   SUM(kind!='human') AS bot
+              FROM hits WHERE ts >= ?
+             GROUP BY d""", (TZ_OFFSET, d30))}
+        series30 = []
+        for i in range(30):
+            day_ts = d30 + i * 86400
+            key = (day_ts + TZ_OFFSET) // 86400
+            r = raw30.get(key)
+            series30.append({
+                'date': time.strftime('%m-%d', time.gmtime(day_ts + TZ_OFFSET)),
+                'human': int(r['human'] or 0) if r else 0,
+                'bot': int(r['bot'] or 0) if r else 0,
+            })
+        out['series30'] = series30
+
+        # ---- 小时分布（近 7 天，按北京时间切小时）----
+        hours = {i: 0 for i in range(24)}
+        for r in q("""
+                SELECT CAST(strftime('%H', ts + ?, 'unixepoch') AS INTEGER) AS h,
+                       COUNT(*) AS n
+                  FROM hits WHERE ts >= ? GROUP BY h""", (TZ_OFFSET, w0)):
+            hours[int(r['h'])] = int(r['n'])
+        out['hours'] = [{'h': h, 'n': hours[h]} for h in range(24)]
+
+        # ---- 地区（CDN 提供的国家代码）----
+        out['countries'] = q("""
+            SELECT COALESCE(NULLIF(country, ''), '??') AS code, COUNT(*) AS n
+              FROM hits WHERE ts >= ?
+             GROUP BY code ORDER BY n DESC LIMIT 12""", (w0,))
+
+        # ---- Top IP ----
+        out['ips'] = q("""
+            SELECT ip, COALESCE(NULLIF(country, ''), '') AS code,
+                   COUNT(*) AS n, COALESCE(NULLIF(bot, ''), '') AS bot
+              FROM hits WHERE ts >= ?
+             GROUP BY ip, bot ORDER BY n DESC LIMIT 15""", (w0,))
+
+        # ---- 最近请求分页 ----
+        per = 20
+        try:
+            page = max(1, int(qs_page))
+        except Exception:
+            page = 1
+        out['recent_total'] = q('SELECT COUNT(*) AS n FROM hits')[0]['n']
+        out['recent_pages'] = max(1, (out['recent_total'] + per - 1) // per)
+        page = min(page, out['recent_pages'])
+        out['recent_page'] = page
+        out['recent'] = q("""
+            SELECT ts, path, status, kind, bot, ua, ip, country
+              FROM hits ORDER BY id DESC LIMIT ? OFFSET ?""",
+                          (per, (page - 1) * per))
     return out
 
 
@@ -1637,12 +1695,32 @@ ADMIN_CSS = """
 .legend s{display:inline-block;width:9px;height:9px;margin-right:4px;vertical-align:middle}
 .mini{font-size:12.5px}
 .mono-cell{font-family:var(--sl-mono);font-size:12px}
+/* 折线图：SVG 随容器宽度缩放，高度固定 */
+.line-chart{display:block;width:100%;height:150px;overflow:visible}
+.line-chart .grid{stroke:var(--sl-line);stroke-width:1;opacity:.6}
+.line-chart .axis{font-size:9px;fill:var(--sl-muted)}
+/* 小时分布：24 根细柱 */
+.hours{display:flex;align-items:flex-end;gap:2px;height:96px;border-bottom:1px solid var(--sl-line)}
+.hours i{flex:1;background:var(--sl-accent);opacity:.75;min-height:1px;display:block}
+.hours-x{display:flex;justify-content:space-between;font-size:10.5px;color:var(--sl-muted);margin-top:3px}
+/* 地区条形 */
+.geo-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12.5px}
+.geo-name{width:76px;flex:none;color:var(--sl-ink)}
+.geo-bar{flex:1;background:var(--sl-line);height:9px;position:relative}
+.geo-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--sl-accent)}
+.geo-num{width:52px;flex:none;text-align:right;color:var(--sl-muted);font-variant-numeric:tabular-nums}
+/* 分页 */
+.pager{display:flex;gap:10px;align-items:center;font-size:12.5px;margin-top:10px;color:var(--sl-muted)}
+.pager a{padding:3px 10px;border:1px solid var(--sl-line);color:var(--sl-accent)}
+.pager a:hover{background:var(--sl-accent);color:#fff;text-decoration:none}
+.dark .stat{background:#141b26}
+.dark .geo-bar{background:#2a3648}
 """
 
 
-def page_admin(me):
+def page_admin(me, qs_page='1'):
     """后台首页。只有 ADMIN_GIDS 里的人能看到。"""
-    s = admin_stats()
+    s = admin_stats(qs_page)
     t = s['today'] or {}
     w = s['week'] or {}
 
@@ -1659,27 +1737,83 @@ def page_admin(me):
         card('累计记录', (s['total'] or {}).get('pv')),
     ])
 
-    # 柱状图：两段堆叠，蓝=人类、橙=爬虫
+    # ---- 30 天折线图 ----
+    def poly(series, key, width=760, height=150, pad=8):
+        n = len(series)
+        mx = max([x[key] for x in series] + [1])
+        pts = []
+        for i, x in enumerate(series):
+            px = pad + i * (width - 2 * pad) / max(1, n - 1)
+            py = height - pad - (x[key] / mx) * (height - 2 * pad)
+            pts.append('%.1f,%.1f' % (px, py))
+        return ' '.join(pts), mx
+
+    s30 = s['series30']
+    h_pts, h_max = poly(s30, 'human')
+    b_pts, b_max = poly(s30, 'bot')
+    vgrid = ''.join(
+        '<line class="grid" x1="8" y1="%.0f" x2="752" y2="%.0f"/>' % (y, y)
+        for y in (8, 55, 102, 149))
+    xlabels = ''.join(
+        '<text class="axis" x="%.0f" y="146" text-anchor="middle">%s</text>'
+        % (8 + i * (760 - 16) / 29.0, s30[i]['date'])
+        for i in (0, 7, 14, 21, 29))
+    line_html = ('<svg class="line-chart" viewBox="0 0 760 150" '
+                 'preserveAspectRatio="none">%s'
+                 '<polyline points="%s" fill="none" stroke="#1a67c2" stroke-width="2" '
+                 'vector-effect="non-scaling-stroke"/>'
+                 '<polyline points="%s" fill="none" stroke="#c2542f" stroke-width="2" '
+                 'vector-effect="non-scaling-stroke"/>%s</svg>'
+                 '<div class="legend"><s style="background:#1a67c2"></s>普通访客（峰值 %d）'
+                 '<s style="background:#c2542f;margin-left:12px"></s>爬虫（峰值 %d）</div>'
+                 % (vgrid, h_pts, b_pts, xlabels, h_max, b_max))
+
+    # ---- 7 天堆叠柱 ----
     peak = max([x['human'] + x['bot'] for x in s['series']] or [1]) or 1
     bars = ''
     for x in s['series']:
-        tot = x['human'] + x['bot']
-        hh = x['human'] / peak * 100
-        hb = x['bot'] / peak * 100
         bars += ('<div class="bar" title="%s 人类 %d / 爬虫 %d">'
                  '<i style="height:%.1f%%"></i><u style="height:%.1f%%"></u>'
                  '<em>%s</em></div>'
-                 % (x['date'], x['human'], x['bot'], hh, hb, x['date']))
+                 % (x['date'], x['human'], x['bot'],
+                    x['human'] / peak * 100, x['bot'] / peak * 100, x['date']))
 
-    def rows(data, cols, fmt=None):
+    # ---- 24 小时分布 ----
+    hmax = max([x['n'] for x in s['hours']] + [1]) or 1
+    hours_html = ''.join(
+        '<i style="height:%.0f%%" title="%02d:00 - %02d:00 共 %d 次"></i>'
+        % (x['n'] / hmax * 100, x['h'], (x['h'] + 1) % 24, x['n'])
+        for x in s['hours'])
+
+    # ---- 地区 ----
+    COUNTRY = {
+        'CN': '中国', 'HK': '中国香港', 'TW': '中国台湾', 'MO': '中国澳门',
+        'US': '美国', 'JP': '日本', 'KR': '韩国', 'SG': '新加坡', 'MY': '马来西亚',
+        'TH': '泰国', 'VN': '越南', 'IN': '印度', 'ID': '印度尼西亚',
+        'DE': '德国', 'GB': '英国', 'FR': '法国', 'NL': '荷兰', 'RU': '俄罗斯',
+        'CA': '加拿大', 'BR': '巴西', 'AU': '澳大利亚', 'SE': '瑞典',
+        'CH': '瑞士', 'FI': '芬兰', 'PL': '波兰', 'UA': '乌克兰', 'TR': '土耳其',
+        '??': '未知',
+    }
+    cmax = max([r['n'] for r in s['countries']] + [1]) or 1
+    geo_html = ''.join(
+        '<div class="geo-row"><span class="geo-name">%s</span>'
+        '<span class="geo-bar"><i style="width:%.0f%%"></i></span>'
+        '<span class="geo-num">%s</span></div>'
+        % (E(COUNTRY.get(r['code'], r['code'])),
+           r['n'] / cmax * 100, '{:,}'.format(int(r['n'])))
+        for r in s['countries']) or '<p class="text-muted small">暂无地区数据</p>'
+
+    # ---- 表格 ----
+    def rows(data, cols, fmt=None, empty='暂无数据'):
         if not data:
-            return '<tr><td colspan="%d" class="text-muted">暂无数据</td></tr>' % len(cols)
-        html_rows = ''
+            return '<tr><td colspan="%d" class="text-muted">%s</td></tr>' % (len(cols), empty)
+        out = ''
         for r in data:
-            cells = ''.join('<td>%s</td>' % (fmt(c, r) if fmt else E(str(r.get(c, ''))))
-                            for c in cols)
-            html_rows += '<tr>%s</tr>' % cells
-        return html_rows
+            out += '<tr>%s</tr>' % ''.join(
+                '<td>%s</td>' % (fmt(c, r) if fmt else E(str(r.get(c, ''))))
+                for c in cols)
+        return out
 
     path_rows = rows(s['paths'], ['path', 'n', 'bot'],
                      lambda c, r: E(str(r['path'])) if c == 'path'
@@ -1699,28 +1833,58 @@ def page_admin(me):
            '{:,}'.format(int(r['n'])))
         for r in s['bots']) or '<tr><td colspan="3" class="text-muted">暂无爬虫记录</td></tr>'
 
+    ip_rows = ''.join(
+        '<tr><td class="mono-cell">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+        % (E(r['ip'] or '-'), E(COUNTRY.get(r['code'], r['code'] or '-')),
+           E(r['bot'] or '普通访客'), '{:,}'.format(int(r['n'])))
+        for r in s['ips']) or '<tr><td colspan="4" class="text-muted">暂无数据</td></tr>'
+
+    status_rows = ''.join(
+        '<tr><td>%d</td><td>%s</td></tr>'
+        % (int(r['status'] or 0), '{:,}'.format(int(r['n'])))
+        for r in s['status']) or '<tr><td colspan="2" class="text-muted">暂无数据</td></tr>'
+
     recent_rows = ''
     for r in s['recent']:
         ts = time.strftime('%m-%d %H:%M:%S',
                            time.gmtime(int(r['ts']) + TZ_OFFSET))
-        ua = (r['ua'] or '')[:52]
         recent_rows += (
             '<tr><td class="mono-cell">%s</td><td class="mono-cell">%s</td>'
-            '<td>%s</td><td>%s</td><td class="mono-cell">%s</td><td class="mono-cell">%s</td></tr>'
+            '<td>%s</td><td>%s</td><td class="mono-cell">%s</td>'
+            '<td class="mono-cell">%s</td><td class="mono-cell">%s</td></tr>'
             % (E(ts), E(r['path']), int(r['status'] or 0),
                E(KIND_LABEL.get(r['kind'], r['kind'])),
-               E(r['bot'] or '-'), E(ua)))
+               E(r['bot'] or '-'), E(r['ip'] or '-'),
+               E((r['ua'] or '')[:46])))
+
+    # ---- 分页 ----
+    cur, pages = s['recent_page'], s['recent_pages']
+    pager = '<div class="pager">'
+    if cur > 1:
+        pager += '<a href="/admin?p=%d">&larr; 上一页</a>' % (cur - 1)
+    pager += '<span>第 %d / %d 页 · 共 %s 条</span>' % (
+        cur, pages, '{:,}'.format(int(s['recent_total'])))
+    if cur < pages:
+        pager += '<a href="/admin?p=%d">下一页 &rarr;</a>' % (cur + 1)
+    pager += '</div>'
 
     body = ("""<h1>流量分析</h1>
 <p class="text-muted">统计包含爬虫。静态资源与 Pyodide 运行时的请求不计入，
-数据保留 %d 天。当前身份：<b>%s</b></p>
+数据保留 %d 天。当前身份：<b>%s</b> · <a href="/courses">回到站点</a></p>
 
 <div class="stat-grid">%s</div>
 
-<div class="sl-card mt-3"><h2>近 7 天</h2>
+<div class="sl-card mt-3"><h2>30 天趋势</h2>%s</div>
+
+<div class="row mt-3">
+<div class="col-lg-6"><div class="sl-card h-100"><h2>近 7 天</h2>
 <div class="bars">%s</div>
 <div class="legend"><s style="background:#1a67c2"></s>普通访客
-<s style="background:#c2542f;margin-left:12px"></s>爬虫 / 脚本</div></div>
+<s style="background:#c2542f;margin-left:12px"></s>爬虫 / 脚本</div></div></div>
+<div class="col-lg-6"><div class="sl-card h-100"><h2>访问时段（7 日，北京时间）</h2>
+<div class="hours">%s</div>
+<div class="hours-x"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div></div></div>
+</div>
 
 <div class="row mt-3">
 <div class="col-lg-7"><div class="sl-card h-100"><h2>热门页面（7 日）</h2>
@@ -1731,22 +1895,37 @@ def page_admin(me):
 <th>类型</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div></div>
 </div>
 
-<div class="sl-card mt-3"><h2>爬虫排行（7 日）</h2>
-<table class="table table-sm lab-table mini"><thead><tr>
-<th>爬虫</th><th>类型</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div>
-
-<div class="sl-card mt-3"><h2>最近 30 条请求</h2>
+<div class="row mt-3">
+<div class="col-lg-6"><div class="sl-card h-100"><h2>访问地区（7 日）</h2>%s</div></div>
+<div class="col-lg-6"><div class="sl-card h-100"><h2>来源 IP Top 15（7 日）</h2>
 <div style="overflow-x:auto"><table class="table table-sm lab-table mini"><thead><tr>
-<th>时间</th><th>路径</th><th>码</th><th>类型</th><th>爬虫</th><th>User-Agent</th>
-</tr></thead><tbody>%s</tbody></table></div></div>""" %
+<th>IP</th><th>地区</th><th>身份</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div>
+<p class="small text-muted mt-2">仅管理员可见。IP 用于识别异常流量，不做用户画像。</p>
+</div></div>
+</div>
+
+<div class="row mt-3">
+<div class="col-lg-7"><div class="sl-card h-100"><h2>爬虫排行（7 日）</h2>
+<table class="table table-sm lab-table mini"><thead><tr>
+<th>爬虫</th><th>类型</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div></div>
+<div class="col-lg-5"><div class="sl-card h-100"><h2>状态码分布（7 日）</h2>
+<table class="table table-sm lab-table mini"><thead><tr>
+<th>状态码</th><th>请求</th></tr></thead><tbody>%s</tbody></table></div></div>
+</div>
+
+<div class="sl-card mt-3"><h2>访问明细</h2>
+<div style="overflow-x:auto"><table class="table table-sm lab-table mini"><thead><tr>
+<th>时间</th><th>路径</th><th>码</th><th>类型</th><th>爬虫</th><th>IP</th><th>User-Agent</th>
+</tr></thead><tbody>%s</tbody></table></div>
+%s</div>""" %
             (HITS_KEEP_DAYS, E(me.get('login') or me.get('name') or ''),
-             grid, bars, path_rows, kind_rows, bot_rows, recent_rows))
+             grid, line_html, bars, hours_html, path_rows, kind_rows,
+             geo_html, ip_rows, bot_rows, status_rows, recent_rows, pager))
 
     return shell(
         '流量分析（后台）',
-        body, '', 'Spider Bond 站点流量分析后台。',
+        body, 'admin', 'Spider Bond 站点流量分析后台。',
         path='/admin', noindex=True, inline_css=ADMIN_CSS,
-        extra_ld='',
     )
 
 
@@ -2095,6 +2274,39 @@ ADMIN_GIDS = {g.strip() for g in
               (os.environ.get('SPIDERLAB_ADMIN_GIDS') or '184600734').split(',')
               if g.strip()}
 
+
+# ---------------------------------------------------------------- 请求身份上下文
+# 每个请求在入口处解析一次身份，页面渲染时从上下文取，避免同一请求里反复查库。
+# 导航栏要不要显示「后台」入口也依赖它——非管理员拿到的 HTML 里根本没有这个链接，
+# 而不是靠 CSS 隐藏（那样 F12 一看就知道地址）。
+def set_request_identity(me):
+    _nonce_local.me = me
+    _nonce_local.is_admin = bool(me and str(me.get('gid') or '') in ADMIN_GIDS)
+
+
+def cur_me():
+    return getattr(_nonce_local, 'me', None)
+
+
+def cur_is_admin():
+    return getattr(_nonce_local, 'is_admin', False)
+
+
+# 后台自身的限速：比靶站严得多。后台是唯一能看到全站数据的入口，
+# 即使攻击者拿到了会话，也不该能高速遍历。
+_ADMIN_HITS = {}
+
+
+def admin_rate_ok(ip, limit=60, window=60):
+    now = time.time()
+    hits = [t for t in _ADMIN_HITS.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        _ADMIN_HITS[ip] = hits
+        return False
+    hits.append(now)
+    _ADMIN_HITS[ip] = hits
+    return True
+
 # (分类, 名称, 正则)。顺序有意义：先匹配到的先赢。
 BOT_RULES = [
     ('search', 'Googlebot', r'Googlebot'),
@@ -2411,6 +2623,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         # 先备好本次请求的 nonce，页面渲染时取用，_send 再把它写进 CSP 头
         new_nonce()
+        # 解析身份：没有会话 cookie 就直接跳过查库，匿名请求走快路径
+        _sid = self._cookie('sl_sid')
+        set_request_identity(session_user(_sid) if _sid else None)
         u = urlparse(self.path)
         p, qs = u.path, parse_qs(u.query)
         h = self.headers
@@ -2463,15 +2678,23 @@ class Handler(BaseHTTPRequestHandler):
             if p in ('/about', '/compliance', '/privacy'):
                 return self._send(200, page_static(p))
             if p == '/admin':
-                me = self._me()
+                # 后台永远不该被搜索引擎索引：CSP + robots 之外再加一层响应头，
+                # 防止有人把后台地址贴到外部页面时被顺带抓走
+                _hdr = {'X-Robots-Tag': 'noindex, nofollow, noarchive'}
+                me = cur_me()
                 if not me:
                     return self._send(200, page_admin_denied(
-                        '请先用 GitHub 登录，再访问后台。'))
-                if str(me.get('gid') or '') not in ADMIN_GIDS:
-                    # 非管理员返回 403，且页面本身 noindex——不要给搜索引擎任何线索
+                        '请先用 GitHub 登录，再访问后台。'), extra=_hdr)
+                if not cur_is_admin():
+                    # 不回显登录名：403 响应不该成为「这个账号是否存在/有何权限」的信息源
                     return self._send(403, page_admin_denied(
-                        '当前账号（%s）没有后台权限。' % (me.get('login') or '未命名')))
-                return self._send(200, page_admin(me))
+                        '当前账号没有后台权限。'), extra=_hdr)
+                if not admin_rate_ok(ip):
+                    return self._send(429, page_admin_denied(
+                        '后台请求过于频繁，请稍后再试。'),
+                        extra={'Retry-After': '60', 'X-Robots-Tag': 'noindex'})
+                return self._send(200, page_admin(me, (qs.get('p') or ['1'])[0]),
+                                  extra=_hdr)
 
             # ---- JSON API（内容类） ----
             if p == '/api/courses':
@@ -2488,6 +2711,9 @@ class Handler(BaseHTTPRequestHandler):
                 u = self._me()
                 return self._json(200, {
                     'enabled': GH_ENABLED,
+                    # 前端据此决定是否显示后台入口。注意这只是一个 UI 提示，
+                    # 真正的权限校验在 /admin 路由里，改前端绕不过去。
+                    'is_admin': cur_is_admin(),
                     'user': ({'login': u['login'], 'name': u['name'], 'avatar': u['avatar']}
                              if u else None),
                 })

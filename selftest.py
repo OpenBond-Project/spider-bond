@@ -185,6 +185,46 @@ check('静态资源不进统计', _assets == 0)
 check('隐私政策披露访问日志',
       '访问日志与流量分析' in req('/privacy')[1] and '90 天' in req('/privacy')[1])
 
+print('\n=== 4f. 后台权限与加固 ===')
+c, b, hd = req('/courses')
+check('匿名访问的 HTML 里没有后台入口', 'href="/admin"' not in b)
+c, b, hd = req('/admin')
+check('匿名访问后台给出登录提示', '请先用 GitHub 登录' in b)
+check('后台响应带 X-Robots-Tag（三重 noindex）',
+      'noindex' in hd.get('X-Robots-Tag', ''))
+
+# 造一个管理员会话和一个非管理员会话，验证越权拦截
+import secrets as _secrets  # noqa: E402
+_admin_sid = _secrets.token_urlsafe(16)
+_guest_sid = _secrets.token_urlsafe(16)
+_ts = __import__('time').strftime('%Y-%m-%dT%H:%M:%SZ', __import__('time').gmtime())
+_ADMIN_GID = sorted(_app.ADMIN_GIDS)[0]
+with _app.db() as _c:
+    for _g, _l, _s in ((_ADMIN_GID, 'admin-test', _admin_sid),
+                       ('999999999', 'guest-test', _guest_sid)):
+        _c.execute('INSERT OR REPLACE INTO users(gid,login,name,avatar,created_at,seen_at)'
+                   ' VALUES(?,?,?,?,?,?)', (_g, _l, _l, '', _ts, _ts))
+        _c.execute('INSERT INTO sessions(sid,gid,created_at) VALUES(?,?,?)',
+                   (_s, _g, _ts))
+
+c, b, hd = req('/admin', headers={'Cookie': 'sl_sid=' + _admin_sid})
+check('管理员可进入后台', c == 200 and '30 天趋势' in b)
+check('后台含 30 天折线图', 'line-chart' in b and '<polyline' in b)
+check('后台含小时分布（24 柱）', b.count('class="hours"') >= 1)
+check('后台含地区统计', '访问地区' in b)
+check('后台含来源 IP 统计', '来源 IP Top 15' in b)
+check('后台含分页控件', 'class="pager"' in b)
+c, b, hd = req('/courses', headers={'Cookie': 'sl_sid=' + _admin_sid})
+check('管理员的导航出现后台入口', 'href="/admin"' in b)
+
+c, b, hd = req('/admin', headers={'Cookie': 'sl_sid=' + _guest_sid})
+check('非管理员访问后台返回 403', c == 403)
+check('403 不回显账号名（不成为信息源）', 'guest-test' not in b)
+c, b, hd = req('/courses', headers={'Cookie': 'sl_sid=' + _guest_sid})
+check('非管理员的导航也没有后台入口', 'href="/admin"' not in b)
+c, b, hd = req('/admin', headers={'Cookie': 'sl_sid=forged-session-id'})
+check('伪造会话被当作未登录', '请先用 GitHub 登录' in b)
+
 print('\n=== 5a. 媒体与文件靶站 ===')
 c, b, _ = req('/lab/gallery')
 check('图库页可访问', c == 200 and '图库' in b)

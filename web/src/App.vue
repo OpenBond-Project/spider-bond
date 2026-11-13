@@ -8,7 +8,7 @@ import {
   Clock, ChevronRight, Info, List, ExternalLink, Flag, Send, Lightbulb,
   CheckCircle2, XCircle, Play, KeyRound, Network, RefreshCw, ScrollText,
   Scale, Eye, Route, Globe2, CircleHelp, Terminal,
-  Moon, Sun, Github, Link2, User,
+  Moon, Sun, Github, Link2, User, BarChart3,
 } from 'lucide-vue-next'
 import hljs from 'highlight.js/lib/core'
 import python from 'highlight.js/lib/languages/python'
@@ -138,6 +138,8 @@ const DEPS = [
     lic: [{ t: 'BSD-2-Clause', u: 'https://spdx.org/licenses/BSD-2-Clause.html' }] },
 ]
 
+const isAdmin = ref(false)       // 仅用于决定是否显示后台入口；真正的权限校验在后端
+
 const navItems = [
   { key: 'home', label: '首页', href: '#/', icon: Home },
   { key: 'courses', label: '课程', href: '#/courses', icon: BookOpen },
@@ -146,6 +148,16 @@ const navItems = [
   { key: 'compliance', label: '合规说明', href: '#/compliance', icon: ShieldCheck },
   { key: 'about', label: '关于', href: '#/about', icon: Info },
 ]
+
+// 后台入口只对管理员出现。注意这是 UI 层的显隐，真正的校验在 /admin 路由里：
+// 手动在地址栏输入 /admin 非管理员一样会被 403 拦下。
+const navList = computed(() => {
+  const list = navItems.slice()
+  if (isAdmin.value) {
+    list.push({ key: 'admin', label: '后台', href: '/admin', icon: BarChart3 })
+  }
+  return list
+})
 
 /* ---------------- 数据 ---------------- */
 const courses = ref([])
@@ -341,6 +353,7 @@ async function loadMe() {
     const d = await r.json()
     ghEnabled.value = !!d.enabled
     authUser.value = d.user || null
+    isAdmin.value = !!d.is_admin
   } catch (e) { /* 后端不可达时静默降级为纯本地模式 */ }
 }
 
@@ -484,7 +497,7 @@ const byTrack = (name) => courses.value.filter((c) => c.track === name)
         <Bug :size="21" :stroke-width="2.2" /> Spider <i>Bond</i>
       </a>
       <nav class="sl-links">
-        <a v-for="n in navItems" :key="n.key" :href="n.href"
+        <a v-for="n in navList" :key="n.key" :href="n.href"
            :class="{ on: view === n.key }">
           <component :is="n.icon" :size="15" /> {{ n.label }}
         </a>
