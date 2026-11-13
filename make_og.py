@@ -134,7 +134,7 @@ d.text((108, 336), "Python 爬虫实训平台", font=font(44, True), fill=INK)
 d.text((110, 404), "在真实服务器上练，不在模拟环境里猜", font=font(26), fill=MUTED)
 
 # 特性标签
-tags = ["20 节系统课程", "33 关在线实战", "14 个靶站"]
+tags = ["20 节系统课程", "36 关在线实战", "15 个靶站"]
 x = 108
 for text in tags:
     f = font(22, True)

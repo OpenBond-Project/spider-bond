@@ -29,7 +29,9 @@ from labs import (BASE, SITES, LEVELS, TASKS, ANSWERS,
                   page_of_books, page_of_quotes,
                   VAULT_USER, VAULT_PASS, VAULT_SECRET, LAB_KEY,
                   GUARD_TOKEN, REPORT_SECRET, REQUIRED_UA, REQUIRED_REFERER,
-                  ROBOTS_DISALLOW)
+                  ROBOTS_DISALLOW,
+                  PORTAL_ITEMS, PORTAL_COMMENTS, PORTAL_USER, PORTAL_PASS,
+                  portal_page, portal_item, portal_pages)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, 'dist')
@@ -963,6 +965,159 @@ CSV 是 UTF-8 with BOM，读的时候用 <code>encoding='utf-8-sig'</code>。</d
     return lab_shell('文件下载 - 二进制与类型判断练习', body, '文件')
 
 
+# ---------------------------------------------------------------- 靶场：招标门户（综合）
+# 这个站是训练场的「毕业设计」：分页、相对链接、相对路径、详情页 Referer 校验、
+# 登录后可见字段、AJAX 评论、附件下载、频率限制、蜜罐链接，全部串在一条链路里。
+# 前面每节课单独练过的技能，在这里必须组合使用才能拿到答案。
+_PORTAL_SESSIONS = set()
+_PORTAL_HITS = {}
+PORTAL_REFERER_HINT = '/lab/portal'
+
+
+def _portal_logged(handler):
+    raw = (handler.headers.get('Cookie', '') or '')
+    for part in raw.split(';'):
+        if '=' in part:
+            k, v = part.strip().split('=', 1)
+            if k == 'portal_session' and v in _PORTAL_SESSIONS:
+                return True
+    return False
+
+
+def _portal_rate_ok(ip):
+    """每 IP 每分钟 120 次。够正常翻页练习，也够触发一次 429 让人见到限速长什么样。"""
+    now = time.time()
+    hits = [t for t in _PORTAL_HITS.get(ip, []) if now - t < 60]
+    if len(hits) >= 120:
+        _PORTAL_HITS[ip] = hits
+        return False
+    hits.append(now)
+    _PORTAL_HITS[ip] = hits
+    return True
+
+
+def lab_portal(page=1, logged=False):
+    items = portal_page(page)
+    pages = portal_pages()
+    rows = ''
+    for it in items:
+        rows += ("""<tr>
+<td><a href="/lab/portal/item/%d">%s</a></td>
+<td>%s</td><td>%s</td><td class="text-end">%s</td><td>%s</td></tr>""" %
+                 (it['id'], E(it['code']), E(it['title']), E(it['region']),
+                  E('%.1f 万' % it['budget']), E(it['pub'])))
+    pager = ''.join(
+        '<a class="pg%s" href="/lab/portal?page=%d">%d</a>'
+        % (' on' if p == page else '', p, p) for p in range(1, pages + 1))
+
+    body = ("""<h1>招标门户</h1>
+<p class="text-muted">共 %d 条公告，分 %d 页。点标题进详情——详情页会检查你是从哪来的。</p>
+%s
+<table class="table table-bordered lab-table"><thead><tr>
+<th>编号</th><th>项目名称</th><th>地区</th><th>预算</th><th>发布日期</th>
+</tr></thead><tbody>%s</tbody></table>
+<div class="pager">%s</div>
+<a href="/lab/portal/trap" style="display:none" rel="nofollow">下一批公告</a>
+<div class="lab-note">%s 状态：%s · 当前第 %d / %d 页。
+本页数据均为虚构，不含任何真实单位或个人信息。</div>""" %
+            (len(PORTAL_ITEMS), pages,
+             ('<div class="callout ok">%s 已登录，详情页的联系方式可见。</div>'
+              % icon('check-circle', 16)) if logged else
+             ('<div class="callout">%s 未登录。详情页的联系方式会显示「登录后可见」，'
+              '<a href="/lab/portal/login">去登录</a>。</div>' % icon('info', 16),
+              ),
+             rows, pager, icon('info', 14),
+             '已登录' if logged else '未登录', page, pages))
+    return lab_shell('招标门户 - 第 %d 页' % page, body, '招标门户')
+
+
+def lab_portal_item(iid, logged=False, referer_ok=True):
+    it = portal_item(iid)
+    if not it:
+        return 404, lab_shell('公告不存在', '<h1>404</h1><p>没有这条公告。</p>', '招标门户')
+    if not referer_ok:
+        body = ("""<h1>403 来源校验失败</h1>
+<div class="callout no">%s 详情页要求请求头带 <code>Referer</code>，
+且指向门户列表页 <code>%s</code>。你这次的请求没有带，或者指向别处。</div>
+<p>补上再试：</p>
+<pre class="lab-code">headers = {'Referer': '%s%s'}
+r = requests.get(BASE + '/lab/portal/item/%d', headers=headers)</pre>
+<p class="mt-3"><a href="/lab/portal">返回列表</a></p>""" %
+                (icon('shield-check', 16), PORTAL_REFERER_HINT,
+                 BASE, PORTAL_REFERER_HINT, iid))
+        return 403, lab_shell('403 来源校验失败', body, '招标门户')
+
+    contact = it['contact'] if logged else '登录后可见'
+    tags = ''.join('<span class="badge bg-secondary me-1">%s</span>' % E(t)
+                   for t in it['tags'])
+    body = ("""<div class="breadcrumb"><a href="/lab/portal">招标门户</a> %s
+<span>%s</span></div>
+<h1>%s</h1>
+<p class="text-muted">%s · %s · 发布于 %s</p>
+<table class="table table-bordered lab-table"><tbody>
+<tr><th style="width:120px">项目编号</th><td>%s</td></tr>
+<tr><th>预算金额</th><td>%s 万元</td></tr>
+<tr><th>所在地区</th><td>%s</td></tr>
+<tr><th>标签</th><td>%s</td></tr>
+<tr><th>联系人</th><td><b id="contact">%s</b></td></tr>
+</tbody></table>
+<div class="sl-card"><h2>附件</h2>
+<ul>
+<li><a href="/media/crawler-handbook.pdf" download>招标文件正文.pdf</a></li>
+<li><a href="/media/books-export.csv" download>报价清单模板.csv</a></li>
+</ul>
+<p class="small text-muted">附件是二进制文件，用 <code>r.content</code> 保存，不要用 <code>r.text</code>。</p></div>
+<div class="sl-card"><h2>评论</h2>
+<div id="comments" class="small text-muted">正在加载…</div>
+<p class="small text-muted mt-2">评论不在这份 HTML 里，由前端请求
+<code>/lab/portal/api/comments?id=%d</code> 后用 JS 填入。
+想拿到它，直接请求那个 JSON 接口，别去解析这个 div。</p>
+<div id="cwrap" data-id="%d"></div>
+<script nonce="%s">
+(function(){
+  var el = document.getElementById('comments');
+  fetch('/lab/portal/api/comments?id=%d').then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.comments || !d.comments.length) { el.textContent = '暂无评论'; return; }
+      el.innerHTML = d.comments.map(function(c){
+        return '<div class="cmt"><b>' + c.user + '</b>：' + c.text + '</div>';
+      }).join('');
+    }).catch(function(){ el.textContent = '评论加载失败'; });
+})();
+</script></div>
+<p class="mt-3"><a href="/lab/portal">返回列表</a></p>""" %
+            (icon('chevron-right', 13), E(it['code']), E(it['title']),
+             E(it['region']), E('%.1f 万元' % it['budget']), E(it['pub']),
+             E(it['code']), E('%.1f' % it['budget']), E(it['region']), tags,
+             E(contact), it['id'], it['id'], cur_nonce(), it['id']))
+    return 200, lab_shell('%s - 招标详情' % it['code'], body, '招标门户')
+
+
+def lab_portal_login(logged=False):
+    body = ("""<h1>门户登录</h1>
+<p class="text-muted">登录后才能在详情页看到联系人。这是演示账号，公开可用。</p>
+<div class="sl-card">
+<table class="table table-bordered lab-table"><thead><tr>
+<th>账号</th><th>密码</th></tr></thead><tbody>
+<tr><td><code>%s</code></td><td><code>%s</code></td></tr>
+</tbody></table>
+<form method="post" action="/lab/portal/login" class="mt-3" style="max-width:360px">
+  <div class="mb-2"><input class="form-control" name="username" placeholder="账号" autocomplete="off"></div>
+  <div class="mb-2"><input class="form-control" name="password" type="password" placeholder="密码" autocomplete="off"></div>
+  <button class="btn btn-primary btn-sm" type="submit">%s 登录</button>
+</form>
+<p class="small text-muted mt-3">表单是 <code>application/x-www-form-urlencoded</code>，
+用 <code>requests.post(url, data={...})</code> 提交。成功后服务器返回 302 并
+<code>Set-Cookie</code>，用 <code>requests.Session()</code> 就能自动带上。</p>
+</div>
+<p>%s</p>""" %
+            (E(PORTAL_USER), E(PORTAL_PASS), icon('check-circle', 15),
+             '当前状态：<b>已登录</b>。<a href="/lab/portal">去列表</a>' if logged
+             else '当前状态：未登录。'))
+    return lab_shell('门户登录', body, '招标门户')
+
+
+
 # ---------------------------------------------------------------- 靶站索引
 def lab_index():
     cards = ''
@@ -1190,16 +1345,16 @@ def page_static(path):
 <p>市面上的爬虫教程有个通病：看懂之后会觉得「我会了」，但一动手写不出来。
 原因不在讲解，在于缺少一个「允许你随便抓」的练习对象——拿真实网站练手容易踩法律红线，
 也容易被封 IP。</p>
-<p>所以这里把练习对象自己造出来：14 个服务端渲染的靶站，结构稳定、字段语义清晰、
+<p>所以这里把练习对象自己造出来：15 个服务端渲染的靶站，结构稳定、字段语义清晰、
 robots.txt 明确允许抓取，数据全部虚构。你可以放心练 XPath、CSS 选择器、
 BeautifulSoup、requests 会话与请求头，不用担心越界。</p></div>
 
 <div class="sl-card"><h2>项目构成</h2>
 <ul>
 <li><b>20 节系统课程</b>：基础篇、解析篇、进阶篇、工程篇，从 robots.txt 合规底线到限速重试的工程收尾</li>
-<li><b>14 个示例靶站</b>：书城、名言墙、电影榜、商品库、招聘板、统计表、RSS、
+<li><b>15 个示例靶站</b>：书城、名言墙、电影榜、商品库、招聘板、统计表、RSS、
 JSON 接口、登录保险库、请求头守卫、图库、视频中心、文件下载</li>
-<li><b>33 关分级训练场</b>：五级难度，在线写代码直接打真实靶站，提交即判分</li>
+<li><b>36 关分级训练场</b>：五级难度，在线写代码直接打真实靶站，提交即判分</li>
 <li><b>浏览器内沙箱</b>：Python 运行时跑在 Web Worker 里，学员代码不进服务器进程</li>
 </ul></div>
 
@@ -1867,6 +2022,11 @@ _DB = {'path': os.environ.get('SPIDERLAB_DB', '')}
 def db_path():
     if _DB['path']:
         return _DB['path']
+    # 容器部署时把数据库放在挂载卷里，避免容器重建丢数据
+    env = os.environ.get('SPIDERLAB_DB')
+    if env:
+        _DB['path'] = env
+        return env
     for cand in ('/opt/spiderlab.db', os.path.join(ROOT, 'spiderlab.db')):
         try:
             if os.access(os.path.dirname(cand) or '.', os.W_OK):
@@ -2442,6 +2602,44 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, lab_media())
             if p == '/lab/files':
                 return self._send(200, lab_files())
+            # ---- 综合实训站：招标门户 ----
+            if p.startswith('/lab/portal'):
+                if not _portal_rate_ok(ip):
+                    return self._send(429, lab_shell(
+                        '429 请求过于频繁',
+                        '<h1>429 请求过于频繁</h1><div class="callout no">'
+                        '每个 IP 每分钟最多 120 次请求。真实站点用 429 让你慢下来，'
+                        '正确做法是读 <code>Retry-After</code> 响应头并退避重试，'
+                        '而不是换 IP 硬刷。</div><p><a href="/lab/portal">返回</a></p>',
+                        '招标门户'), 'text/html; charset=utf-8',
+                        {'Retry-After': '30', 'Cache-Control': 'no-cache'})
+                _logged = _portal_logged(self)
+                if p in ('/lab/portal', '/lab/portal/'):
+                    _pg = max(1, int(qs.get('page', ['1'])[0]))
+                    return self._send(200, lab_portal(_pg, _logged))
+                if p == '/lab/portal/login':
+                    return self._send(200, lab_portal_login(_logged))
+                if p == '/lab/portal/api/comments':
+                    _iid = int(qs.get('id', ['0'])[0] or 0)
+                    return self._json(200, {'id': _iid,
+                                            'comments': PORTAL_COMMENTS.get(_iid, [])})
+                if p == '/lab/portal/trap':
+                    # 蜜罐：正常用户看不到这个链接（display:none），只有顺着页面
+                    # 所有 href 无脑抓的爬虫会撞上来
+                    return self._send(403, lab_shell(
+                        '403 蜜罐',
+                        '<h1>你踩到蜜罐了</h1><div class="callout no">'
+                        '这个链接在页面上是隐藏的（<code>display:none</code>），'
+                        '正常用户不可能点到。顺着所有 href 无脑抓取才会进来。'
+                        '真实站点用这种方式识别粗暴爬虫——不要见链接就 follow。</div>'
+                        '<p><a href="/lab/portal">返回</a></p>', '招标门户'))
+                _m = re.match(r'^/lab/portal/item/(\d+)$', p)
+                if _m:
+                    _ref = (self.headers.get('Referer', '') or '')
+                    _code, _html = lab_portal_item(int(_m.group(1)), _logged,
+                                                   PORTAL_REFERER_HINT in _ref)
+                    return self._send(_code, _html)
+                return self._send(404, 'Not Found', 'text/plain; charset=utf-8')
             m = re.match(r'^/lab/books/(\d+)$', p)
             if m:
                 code, body = lab_book_detail(int(m.group(1)))
@@ -2526,6 +2724,20 @@ class Handler(BaseHTTPRequestHandler):
             ctype = self.headers.get('Content-Type', '')
             data = (json.loads(raw or '{}') if 'application/json' in ctype
                     else dict(parse_qsl(raw))) if raw else {}
+            if p == '/lab/portal/login':
+                # 教学用登录：账号密码公开，会话只存在内存里，重启即失效
+                uname = str(data.get('username') or '').strip()
+                pwd = str(data.get('password') or '').strip()
+                if uname == PORTAL_USER and pwd == PORTAL_PASS:
+                    sid = secrets.token_urlsafe(12)
+                    _PORTAL_SESSIONS.add(sid)
+                    return self._redirect('/lab/portal', {
+                        'Set-Cookie': 'portal_session=%s; Path=/lab/portal; '
+                                      'HttpOnly; SameSite=Lax' % sid})
+                return self._send(200, lab_portal_login(False).replace(
+                    '<h1>门户登录</h1>',
+                    '<h1>门户登录</h1><div class="callout no">账号或密码不对，'
+                    '用页面表格里的演示账号。</div>'))
             if p == '/api/progress':
                 u = self._me()
                 if not u:

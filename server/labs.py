@@ -202,9 +202,84 @@ SITES = [
      'level': 'L3', 'learn': '响应头判断 + 二进制落盘',
      'desc': 'PDF / CSV / JSON / ZIP 四种文件，练习按 Content-Type 判断类型、'
              '用 content 而不是 text 保存二进制。'},
+    {'path': '/lab/portal', 'name': '招标门户', 'tech': '分页 / 详情 / 登录 / Referer / AJAX / 限速',
+     'level': 'L4-L5', 'learn': '全链路组合：翻页 + 会话 + 请求头 + 接口',
+     'desc': '综合实训站，难度最高。3 页公告、详情页校验 Referer、联系方式登录可见、'
+             '评论走 AJAX 接口、每 IP 限速、还藏了一个蜜罐链接。'
+             '前面每节课的技能，在这里要串起来才能拿到答案。'},
 ]
 
-# ---------------------------------------------------------------- 五级训练场
+# ---------------------------------------------------------------- 综合靶站：招标门户
+# 这个站存在的意义是把前面所有技能串起来：分页、相对链接、详情页 Referer 校验、
+# 登录后可见字段、AJAX 评论、附件下载、频率限制、蜜罐链接。
+# 单课学会的技能在这里必须组合使用才能拿到答案，是训练场的「毕业设计」。
+PORTAL_PER_PAGE = 4
+PORTAL_USER = 'portal'
+PORTAL_PASS = 'demo1234'
+
+PORTAL_ITEMS = [
+    {'id': 1001, 'code': 'ZB-2026-1001', 'title': '城市数据中台一期建设',
+     'region': '杭州', 'budget': 1280.0, 'contact': '张工 0571-8888-1001',
+     'pub': '2026-11-02', 'tags': ['数据平台', '集成']},
+    {'id': 1002, 'code': 'ZB-2026-1002', 'title': '政务大厅自助终端采购',
+     'region': '宁波', 'budget': 460.5, 'contact': '李工 0574-8765-1002',
+     'pub': '2026-11-02', 'tags': ['硬件', '采购']},
+    {'id': 1003, 'code': 'ZB-2026-1003', 'title': '园区网络改造与运维外包',
+     'region': '杭州', 'budget': 890.0, 'contact': '王工 0571-8888-1003',
+     'pub': '2026-11-03', 'tags': ['网络', '运维']},
+    {'id': 1004, 'code': 'ZB-2026-1004', 'title': '档案数字化加工服务',
+     'region': '温州', 'budget': 235.0, 'contact': '陈工 0577-8800-1004',
+     'pub': '2026-11-03', 'tags': ['数字化', '服务']},
+    {'id': 1005, 'code': 'ZB-2026-1005', 'title': '智慧交通信号优化系统',
+     'region': '绍兴', 'budget': 1720.0, 'contact': '赵工 0575-8520-1005',
+     'pub': '2026-11-04', 'tags': ['交通', '算法']},
+    {'id': 1006, 'code': 'ZB-2026-1006', 'title': '医院信息系统安全加固',
+     'region': '杭州', 'budget': 580.0, 'contact': '钱工 0571-8888-1006',
+     'pub': '2026-11-04', 'tags': ['安全', '医疗']},
+    {'id': 1007, 'code': 'ZB-2026-1007', 'title': '水质监测站设备更新',
+     'region': '湖州', 'budget': 312.8, 'contact': '孙工 0572-2600-1007',
+     'pub': '2026-11-05', 'tags': ['环保', '物联网']},
+    {'id': 1008, 'code': 'ZB-2026-1008', 'title': '统一身份认证平台升级',
+     'region': '宁波', 'budget': 745.0, 'contact': '周工 0574-8765-1008',
+     'pub': '2026-11-05', 'tags': ['认证', '集成']},
+    {'id': 1009, 'code': 'ZB-2026-1009', 'title': '中小学多媒体教室改造',
+     'region': '台州', 'budget': 968.0, 'contact': '吴工 0576-8800-1009',
+     'pub': '2026-11-06', 'tags': ['教育', '硬件']},
+    {'id': 1010, 'code': 'ZB-2026-1010', 'title': '城市照明节能改造',
+     'region': '金华', 'budget': 654.2, 'contact': '郑工 0579-8200-1010',
+     'pub': '2026-11-06', 'tags': ['节能', '市政']},
+    {'id': 1011, 'code': 'ZB-2026-1011', 'title': '公共数据开放平台运维',
+     'region': '杭州', 'budget': 420.0, 'contact': '冯工 0571-8888-1011',
+     'pub': '2026-11-07', 'tags': ['数据平台', '运维']},
+    {'id': 1012, 'code': 'ZB-2026-1012', 'title': '应急指挥视频会议系统',
+     'region': '丽水', 'budget': 1090.0, 'contact': '褚工 0578-2100-1012',
+     'pub': '2026-11-07', 'tags': ['应急', '音视频']},
+]
+
+PORTAL_COMMENTS = {
+    1001: [{'user': '同行 A', 'text': '资质要求里有等保三级，注意看附件。'},
+           {'user': '同行 B', 'text': '这个预算偏紧，集成部分建议拆包。'}],
+    1005: [{'user': '同行 C', 'text': '算法部分要求有落地案例，门槛不低。'}],
+    1009: [{'user': '同行 D', 'text': '分三个标段，可以只投其中一个。'}],
+}
+
+
+def portal_page(page=1):
+    """按页取项目。页码从 1 开始，超出范围返回空列表。"""
+    page = max(1, page)
+    start = (page - 1) * PORTAL_PER_PAGE
+    return PORTAL_ITEMS[start:start + PORTAL_PER_PAGE]
+
+
+def portal_pages():
+    return (len(PORTAL_ITEMS) + PORTAL_PER_PAGE - 1) // PORTAL_PER_PAGE
+
+
+def portal_item(iid):
+    return next((x for x in PORTAL_ITEMS if x['id'] == iid), None)
+
+
+
 # 等级按「要写多少代码、涉及几个概念」划分，而不是按名词听起来高不高级。
 LEVELS = [
     {'code': 'L1', 'name': '单页提取', 'badge': '入门', 'color': 'primary',
@@ -226,12 +301,14 @@ LEVELS = [
      'desc': '要读 JSON 分页字段、清洗类型、处理 data-* 与蜜罐，比 L3 多一层数据加工。',
      'need': '会 JSON 翻页、会字段清洗、会识别蜜罐',
      'skills': ['JSON 接口分页', 'has_next 终止', 'data-* 提取', '蜜罐规避'],
-     'courses': ['11', '12', '14'], 'tasks': ['L4-1', 'L4-2', 'L4-3', 'L4-4', 'L4-5', 'L4-6']},
+     'courses': ['11', '12', '14'],
+     'tasks': ['L4-1', 'L4-2', 'L4-3', 'L4-4', 'L4-5', 'L4-6', 'L4-7']},
     {'code': 'L5', 'name': '综合工程', 'badge': '挑战', 'color': 'dark',
      'desc': '要组合限速退避、多源合并、详情跟进与结构化输出，按真实项目标准交付。',
      'need': '会退避重试、会多源合并、会结构化输出',
      'skills': ['限速退避', '多源合并', '详情跟进', '结构化输出', 'robots 合规'],
-     'courses': ['14', '19', '20'], 'tasks': ['L5-1', 'L5-2', 'L5-3', 'L5-4', 'L5-5', 'L5-6']},
+     'courses': ['14', '19', '20'],
+     'tasks': ['L5-1', 'L5-2', 'L5-3', 'L5-4', 'L5-5', 'L5-6', 'L5-7', 'L5-8']},
 ]
 
 TASKS = {
@@ -483,6 +560,35 @@ TASKS.update({
         'hint': '两边字段名不同（书城是 h2 + span.price，商品是 h3 + span.price），'
                 '先各自归一成 (name, price)，合并后再按价格降序排序取前 3。',
         'skills': ['多源合并', '字段归一', '排序']},
+
+    # ---------------- 综合实训站（招标门户） ----------------
+    'L4-7': {'title': '翻完三页的招标编号', 'level': 'L4', 'points': 30,
+        'goal': '招标门户共 3 页，每页 4 条。提取全部 12 个项目编号'
+                '（形如 ZB-2026-1001），按页面顺序用英文逗号分隔提交。',
+        'target': '/lab/portal', 'target_text': '招标门户',
+        'format': '英文逗号分隔的有序列表', 'type': 'olist',
+        'hint': '翻页参数是 ?page=1..3。编号在表格第一列的链接文本里，'
+                '也可以从 href="/lab/portal/item/1001" 里反推——但反推容易漏，建议抓文本。',
+        'skills': ['分页循环', '相对链接', '文本提取']},
+
+    'L5-7': {'title': '带 Referer 才能看详情', 'level': 'L5', 'points': 40,
+        'goal': '详情页会检查来源页，直接请求返回 403。带上正确的 Referer 抓到'
+                '编号 ZB-2026-1001 项目的联系人，原样提交（含电话）。',
+        'target': '/lab/portal/item/1001', 'target_text': '招标详情',
+        'format': '一段纯文本', 'type': 'text',
+        'hint': 'headers={"Referer": "https://spider.skkk.uno/lab/portal"}。'
+                '先看 403 页面里的提示，它会告诉你要求什么样的 Referer。',
+        'skills': ['请求头', 'Referer 校验', '403 处理']},
+
+    'L5-8': {'title': '登录后才看得到联系方式', 'level': 'L5', 'points': 45,
+        'goal': '未登录时详情页的联系方式显示「登录后可见」。用账号 portal / 密码 demo1234 '
+                '登录，保持会话再抓编号 ZB-2026-1005 项目的联系人，原样提交（含电话）。',
+        'target': '/lab/portal/login', 'target_text': '门户登录页',
+        'format': '一段纯文本', 'type': 'text',
+        'hint': 's = requests.Session()；先 s.post(url, data={"username":..., "password":...})，'
+                '再用同一个 s 请求详情页——Session 会自动带上 Set-Cookie 里的会话。'
+                '别忘了 Referer。',
+        'skills': ['表单登录', 'Session 保持', 'Cookie', '请求头']},
 })
 
 
@@ -723,6 +829,10 @@ def compute_answers():
         'L3-7': '/media/clip-01.mp4',
         # CSV 行数从实际文件推导，避免改了数据集忘记同步答案
         'L3-8': media_csv_rows(),
+        # ---- 综合实训站 ----
+        'L4-7': [x['code'] for x in PORTAL_ITEMS],
+        'L5-7': portal_item(1001)['contact'],
+        'L5-8': portal_item(1005)['contact'],
     }
 
 

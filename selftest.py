@@ -224,6 +224,44 @@ check('about 页关卡数量与实际一致（%d）' % len(TASKS),
 check('靶站索引包含新增三站',
       all(x in req('/lab/')[1] for x in ('/lab/gallery', '/lab/media', '/lab/files')))
 
+print('\n=== 5c. 综合实训站（招标门户）===')
+c, b, _ = req('/lab/portal')
+check('门户列表可访问', c == 200 and '招标门户' in b)
+check('列表含 3 个分页链接', b.count('class="pg') == 3)
+check('列表含蜜罐链接（display:none）', 'lab/portal/trap' in b and 'display:none' in b)
+check('列表未登录时提示登录可见', '登录后可见' in b)
+
+c, b, _ = req('/lab/portal/item/1001')
+check('详情页缺 Referer 返回 403', c == 403 and '来源校验失败' in b)
+c, b, _ = req('/lab/portal/item/1001', headers={'Referer': BASE + '/lab/portal'})
+check('带 Referer 可看详情', c == 200 and 'ZB-2026-1001' in b)
+check('未登录时联系方式被遮蔽', 'id="contact">登录后可见' in b)
+c, b, _ = req('/lab/portal/item/9999', headers={'Referer': BASE + '/lab/portal'})
+check('不存在的公告返回 404', c == 404)
+
+c, b, hd = req('/lab/portal/api/comments?id=1001')
+check('评论走独立 JSON 接口', c == 200 and '"comments"' in b and '同行' in b)
+
+# 登录 → 带会话访问详情，联系方式应可见
+import http.cookiejar as _cj  # noqa: E402
+_jar = _cj.CookieJar()
+_op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_jar))
+_body = urllib.parse.urlencode({'username': 'portal', 'password': 'demo1234'}).encode()
+_r = _op.open(urllib.request.Request(
+    'http://127.0.0.1:%d/lab/portal/login' % PORT, data=_body,
+    headers={'Content-Type': 'application/x-www-form-urlencoded'}), timeout=10)
+check('登录成功并下发会话 Cookie', len(list(_jar)) >= 1)
+_r = _op.open(urllib.request.Request(
+    'http://127.0.0.1:%d/lab/portal/item/1005' % PORT,
+    headers={'Referer': BASE + '/lab/portal'}), timeout=10)
+_after = _r.read().decode('utf-8', 'ignore')
+_idx = _after.find('id="contact"')
+check('登录后联系方式可见', ANSWERS['L5-8'] in _after,
+      _after[_idx:_idx + 60] if _idx >= 0 else '')
+
+c, b, _ = req('/lab/portal/trap')
+check('蜜罐链接返回 403', c == 403 and '蜜罐' in b)
+
 print('\n=== 5. 靶场页面（服务端渲染，源码即数据） ===')
 c, b, _ = req('/lab/')
 check('靶站索引', c == 200 and '书城' in b)

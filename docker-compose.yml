@@ -1,0 +1,41 @@
+# 单容器部署：应用自带静态文件服务，前面不需要 Nginx。
+#
+#   docker compose up -d --build
+#   打开 http://localhost:8080
+#
+# 想接 Nginx / Caddy 做反向代理和证书，把 8080 端口映射去掉，
+# 让反代服务直接连 spiderbond:8080 即可。
+
+services:
+  spiderbond:
+    build: .
+    image: spiderbond:latest
+    container_name: spiderbond
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # 数据库落在挂载卷里，容器重建不丢学习记录
+      SPIDERLAB_DB: /data/spiderlab.db
+      # 站点域名（用于 sitemap / 统计展示）
+      # SL_DOMAIN: spider.example.com
+      # GitHub 登录（可选，不填则只能用本地模式）
+      # GITHUB_CLIENT_ID: Ov23li...
+      # GITHUB_CLIENT_SECRET: ...
+      # GITHUB_REDIRECT: https://spider.example.com/auth/github/callback
+      # 后台管理员：GitHub 用户 ID，逗号分隔
+      # SPIDERLAB_ADMIN_GIDS: 123456789
+      # 投放 AdSense 时设为 1，CSP 会放开 Google 的域名
+      # SPIDERLAB_ADS: "1"
+    volumes:
+      - spiderbond-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  spiderbond-data:

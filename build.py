@@ -143,6 +143,14 @@ def build_vue():
         print(r.stderr[-3000:])
         sys.exit('[vue] BUILD FAILED')
     print(r.stdout[-1200:])
+
+
+def copy_dist():
+    """把前端产物与静态资源并入 server/dist。
+
+    与 npm 构建分开，是因为 Docker 多阶段构建里前端由 node 阶段产出，
+    Python 阶段只需要复制，不该再依赖 npm。
+    """
     src = WEB / 'dist'
     dst = SERVER / 'dist'
     # 保留 pyodide/（15MB 运行时，下载一次即可复用），只替换前端产物
@@ -251,7 +259,12 @@ def make_tarball():
 if __name__ == '__main__':
     build_sprite()
     copy_assets()
-    build_vue()
+    if os.environ.get('SPIDERLAB_SKIP_WEB') == '1':
+        # Docker 多阶段构建：前端已由 node 阶段构建好，这里只复制
+        print('[vue] 跳过 npm（SPIDERLAB_SKIP_WEB=1，使用已有 web/dist）')
+    else:
+        build_vue()
+    copy_dist()
     import prepare_pyodide
     prepare_pyodide.main()
     precompress()

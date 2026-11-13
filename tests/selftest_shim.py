@@ -15,7 +15,8 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+# 脚本放在 tests/ 下，项目根目录是上一级
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'server'))
 os.chdir(ROOT / 'server')
 

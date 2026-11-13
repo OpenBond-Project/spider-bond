@@ -122,7 +122,10 @@ cmd_boot() {
     unset pw
     die "sshpass 方式安装失败。
   如果密码确认无误，多半是 sshpass 在 Git Bash 下无法正确传递含 + = 等字符的密码。
-  改用 paramiko 通道重试（更可靠）:  python bootstrap_ssh.py"
+  可以手动装公钥：
+    1) 复制本机公钥内容:  cat ~/.ssh/id_ed25519.pub
+    2) 登录服务器，粘贴到 ~/.ssh/authorized_keys 末尾
+    3) 回来重跑:  ./sl.sh status"
   fi
 
   sleep 1

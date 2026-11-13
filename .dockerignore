@@ -1,0 +1,23 @@
+# 构建上下文排除项：镜像里不需要源码依赖、构建产物与本地数据
+.git
+.gitignore
+node_modules
+web/node_modules
+web/dist
+server/dist
+server/pyodide
+*.tar.gz
+*.db
+*.sqlite
+.env
+.env.local
+.env.*.local
+__pycache__
+*.pyc
+tests
+.workbuddy
+.idea
+.vscode
+*.log
+shot_*.png
+admin_shot.png
