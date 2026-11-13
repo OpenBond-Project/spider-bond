@@ -1,0 +1,17 @@
+[Unit]
+Description=SpiderLab Python Crawler Learning Platform
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/spiderlab
+Environment=SPIDERLAB_PORT=8080
+ExecStart=/usr/bin/python3 /opt/spiderlab/app.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/spiderlab.log
+StandardError=append:/var/log/spiderlab.log
+
+[Install]
+WantedBy=multi-user.target

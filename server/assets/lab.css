@@ -1,0 +1,6 @@
+/* SpiderLab 靶场补充样式（Bootstrap 5 之上） */
+.ico { display: inline-block; }
+.sl-card a, .sl-tile a { text-decoration: none; }
+.lab-table code { white-space: nowrap; }
+.badge-lv .ico { vertical-align: -3px; }
+@media print { header.sl, footer.sl, .lab-note { display: none; } }

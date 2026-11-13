@@ -1,0 +1,478 @@
+/* ==========================================================================
+   SpiderLab 共享主题层
+   SPA 与服务端渲染靶场页共用同一份文件，保证亮色/夜间模式完全一致。
+   - 护眼低对比配色（暖白 + 柔和墨色），避免纯黑纯白长时间刺激
+   - 夜间模式：低亮度、低蓝光、无纯黑
+   - 全站代码统一等宽字体 + highlight.js 语法高亮配色
+   ========================================================================== */
+
+:root {
+  /* 等宽字体栈：英文优先开源等宽，中文必须显式指定回退字体。
+     否则浏览器会一直找到 monospace，Windows 上落到宋体——小字号 + 深色背景下
+     笔画细、有锯齿，中文注释和字符串会明显发虚。 */
+  --sl-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Menlo,
+             Consolas, "DejaVu Sans Mono", "Liberation Mono", "Courier New",
+             "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+             "Noto Sans CJK SC", "Source Han Sans SC", monospace;
+  --sl-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+             "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
+             "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
+             "Source Han Sans SC", sans-serif;
+}
+
+/* ----------------------------------------------------------- 亮色（护眼） */
+html[data-theme="light"], :root {
+  --sl-bg: #f4f3ef;
+  --sl-surface: #fbfaf7;
+  --sl-surface-2: #f0eee8;
+  --sl-ink: #333c46;
+  --sl-body: #4a5561;
+  --sl-muted: #78808a;
+  --sl-line: #dedbd2;
+  --sl-line-strong: #c9c5ba;
+  --sl-navy: #2b4c6f;
+  --sl-blue: #396f9f;
+  --sl-blue-soft: #e9f0f6;
+  --sl-orange: #a9693f;
+  --sl-green: #2f7a56;
+  --sl-green-bg: #eaf4ed;
+  --sl-amber: #8a6a1f;
+  --sl-amber-bg: #faf3e2;
+  --sl-red: #a34942;
+  --sl-red-bg: #f9edeb;
+  --sl-code-bg: #f5f3ed;
+  --sl-code-ink: #3a4552;
+  --sl-hero: #2b4c6f;
+  --sl-hero-ink: #dce7f1;
+  color-scheme: light;
+  /* Bootstrap 变量同步，避免表格/表单仍用冷白 */
+  --bs-body-bg: #f4f3ef;
+  --bs-body-color: #4a5561;
+  --bs-border-color: #dedbd2;
+  --bs-secondary-color: #78808a;
+  --bs-emphasis-color: #333c46;
+  --bs-heading-color: #2b4c6f;
+
+  /* highlight.js token 配色（低饱和） */
+  --hl-keyword: #7b5499;
+  --hl-string: #2f7a56;
+  --hl-comment: #8b8779;
+  --hl-number: #a1693f;
+  --hl-title: #2c5f96;
+  --hl-attr: #a04a3c;
+  --hl-meta: #6a7380;
+  --hl-literal: #a1693f;
+}
+
+/* ----------------------------------------------------------- 夜间 */
+html[data-theme="dark"] {
+  --sl-bg: #151a20;
+  --sl-surface: #1c232c;
+  --sl-surface-2: #222b36;
+  --sl-ink: #cdd6e0;
+  --sl-body: #aab7c5;
+  --sl-muted: #8493a4;
+  --sl-line: #2c3846;
+  --sl-line-strong: #3b495a;
+  --sl-navy: #a9c9ee;
+  --sl-blue: #7cb2e8;
+  --sl-blue-soft: #1e2c3c;
+  --sl-orange: #d59a72;
+  --sl-green: #6cc79b;
+  --sl-green-bg: #1b2e28;
+  --sl-amber: #d8b265;
+  --sl-amber-bg: #2c271c;
+  --sl-red: #e08b83;
+  --sl-red-bg: #2e2223;
+  --sl-code-bg: #11171e;
+  --sl-code-ink: #c6d2de;
+  --sl-hero: #1b2735;
+  --sl-hero-ink: #b9cee2;
+  color-scheme: dark;
+  --bs-body-bg: #151a20;
+  --bs-body-color: #aab7c5;
+  --bs-border-color: #2c3846;
+  --bs-secondary-color: #8493a4;
+  --bs-emphasis-color: #cdd6e0;
+  --bs-heading-color: #a9c9ee;
+
+  --hl-keyword: #c9a0ee;
+  --hl-string: #8fd0a8;
+  --hl-comment: #7f8c9b;
+  --hl-number: #e0b183;
+  --hl-title: #86bdf0;
+  --hl-attr: #f0a08f;
+  --hl-meta: #9aa8b8;
+  --hl-literal: #e0b183;
+}
+
+/* Element Plus 暗色变量（html.dark 由切换脚本同步维护） */
+html.dark {
+  --el-bg-color: #1c232c;
+  --el-bg-color-page: #151a20;
+  --el-bg-color-overlay: #1c232c;
+  --el-text-color-primary: #cdd6e0;
+  --el-text-color-regular: #aab7c5;
+  --el-text-color-secondary: #8493a4;
+  --el-text-color-placeholder: #7b8898;
+  --el-border-color: #3b495a;
+  --el-border-color-light: #2c3846;
+  --el-border-color-lighter: #26313d;
+  --el-fill-color-blank: #1c232c;
+  --el-fill-color-light: #222b36;
+  --el-color-primary: #7cb2e8;
+  --el-color-primary-light-3: #5e91c4;
+  --el-color-primary-light-5: #4a7399;
+  --el-color-primary-light-7: #385777;
+  --el-color-primary-light-8: #2d465e;
+  --el-color-primary-light-9: #24384a;
+  --el-color-primary-dark-2: #9cc6f0;
+  --el-mask-color: rgba(8, 12, 17, .72);
+}
+
+/* ----------------------------------------------------------- 基础覆盖 */
+html[data-theme] body {
+  background: var(--sl-bg) !important;
+  color: var(--sl-body) !important;
+  font-family: var(--sl-sans) !important;
+  font-size: 15.5px !important;
+  line-height: 1.85 !important;
+  letter-spacing: .012em;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+html[data-theme] p { line-height: 1.95; }
+html[data-theme] li { line-height: 1.9; }
+html[data-theme] h1, html[data-theme] h2, html[data-theme] h3, html[data-theme] h4,
+html[data-theme] .sl-brand, html[data-theme] .course-row .c-main b,
+html[data-theme] .sl-tile h3, html[data-theme] .sl-stat b,
+html[data-theme] .lesson-head h1, html[data-theme] .lesson-section-head h2,
+html[data-theme] .lesson-quiz-q, html[data-theme] .task-detail h2 {
+  color: var(--sl-navy) !important;
+}
+html[data-theme] a { color: var(--sl-blue) !important; }
+html[data-theme] .sl-muted, html[data-theme] .text-muted,
+html[data-theme] .breadcrumb, html[data-theme] .breadcrumb a,
+html[data-theme] .lab-note, html[data-theme] footer.sl,
+html[data-theme] .sl-footer, html[data-theme] .course-row .c-main small,
+html[data-theme] .kv .k {
+  color: var(--sl-muted) !important;
+}
+
+/* 大面积面板 */
+html[data-theme] .sl-header, html[data-theme] .sl-card, html[data-theme] .sl-tile,
+html[data-theme] .sl-stat, html[data-theme] .course-row, html[data-theme] .task-list,
+html[data-theme] .task-item, html[data-theme] .task-detail, html[data-theme] .lv-pane,
+html[data-theme] .lesson-quiz, html[data-theme] .lesson-step,
+html[data-theme] .lesson-objectives, html[data-theme] .codelab,
+html[data-theme] .codelab-side, html[data-theme] footer.sl, html[data-theme] .sl-footer,
+html[data-theme] table.lab-table, html[data-theme] .book, html[data-theme] .quote-card,
+html[data-theme] .stat-box, html[data-theme] .codelab-editor {
+  background: var(--sl-surface) !important;
+  border-color: var(--sl-line) !important;
+  color: var(--sl-body) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .sl-header { border-bottom: 2px solid var(--sl-navy) !important; }
+html[data-theme] .sl-nav .sl-links a { color: var(--sl-body) !important; }
+html[data-theme] .sl-nav .sl-links a:hover { background: var(--sl-surface-2) !important; }
+html[data-theme] .sl-nav .sl-links a.on {
+  color: var(--sl-blue) !important;
+  background: var(--sl-blue-soft) !important;
+  border-bottom-color: var(--sl-blue) !important;
+}
+html[data-theme] .sl-hero {
+  background: var(--sl-hero) !important;
+  color: var(--sl-hero-ink) !important;
+}
+html[data-theme] .sl-hero h1 { color: #f2f7fc !important; }
+html[data-theme] .sl-hero p { color: var(--sl-hero-ink) !important; }
+html[data-theme] .sl-hero-badges { border-top-color: rgba(255,255,255,.14) !important; }
+html[data-theme] .sl-hero-badges span { color: var(--sl-hero-ink) !important; border-right-color: rgba(255,255,255,.16) !important; }
+html[data-theme] .sl-hero .hero-btn {
+  background: #f2f7fc !important; border-color: #f2f7fc !important; color: #233c55 !important;
+}
+html[data-theme] .sl-hero .hero-btn.ghost {
+  background: transparent !important; border-color: rgba(255,255,255,.55) !important; color: #fff !important;
+}
+html[data-theme] .sl-stat .ico-wrap, html[data-theme] .sl-tile .tile-icon,
+html[data-theme] .course-no, html[data-theme] .lesson-section-no,
+html[data-theme] .lesson-step-no, html[data-theme] .quiz-key,
+html[data-theme] .lesson-no {
+  background: var(--sl-blue-soft) !important;
+  color: var(--sl-blue) !important;
+  border-color: var(--sl-line) !important;
+}
+html[data-theme] .lesson-section-no, html[data-theme] .lesson-step-no,
+html[data-theme] .lesson-no { background: var(--sl-blue) !important; color: #fff !important; border: 0 !important; }
+
+/* 分区与列表 */
+html[data-theme] .section-head, html[data-theme] .track-title,
+html[data-theme] .lesson-section-head, html[data-theme] .sl-page-head,
+html[data-theme] .lesson-head, html[data-theme] .codelab-head,
+html[data-theme] .lesson-step-head, html[data-theme] .editor-bar,
+html[data-theme] .lv-tab, html[data-theme] .task-item,
+html[data-theme] .course-row, html[data-theme] .sl-stat,
+html[data-theme] .lesson-example-label, html[data-theme] .kv,
+html[data-theme] .codelab-actions {
+  border-color: var(--sl-line) !important;
+}
+/* 下面这些类在 style.css 里写死了浅色背景，暗色下必须显式换底，
+   否则整块区域仍是亮色（曾导致「STEP 1 先看声明」这条头部在夜间模式下发白）。 */
+html[data-theme] .lesson-step-head { background: var(--sl-surface-2) !important; }
+html[data-theme] .lesson-step-head b { color: var(--sl-ink) !important; }
+html[data-theme] .sl-progress {
+  background: var(--sl-surface-2) !important;
+  border-color: var(--sl-line) !important;
+}
+html[data-theme] .sl-stats { background: var(--sl-surface) !important; }
+html[data-theme] .section-head h2, html[data-theme] .track-title,
+html[data-theme] .lesson-objectives, html[data-theme] .lesson-recap,
+html[data-theme] .course-row:hover, html[data-theme] .task-item:hover,
+html[data-theme] .sl-tile:hover, html[data-theme] .quiz-opt:hover,
+html[data-theme] .lv-tab:hover { background: var(--sl-blue-soft) !important; }
+html[data-theme] .task-item.active, html[data-theme] .lv-tab.on {
+  background: var(--sl-blue-soft) !important; color: var(--sl-blue) !important;
+}
+html[data-theme] .lv-tabs { border-bottom-color: var(--sl-navy) !important; background: var(--sl-surface) !important; }
+html[data-theme] .lv-tab { background: var(--sl-surface) !important; color: var(--sl-body) !important; }
+
+/* 标签、提示块、按钮 */
+html[data-theme] .sl-tag {
+  background: var(--sl-surface-2) !important;
+  border-color: var(--sl-line-strong) !important;
+  color: var(--sl-body) !important;
+}
+html[data-theme] .sl-tag.primary, html[data-theme] .badge.bg-primary {
+  background: var(--sl-blue-soft) !important; border-color: var(--sl-blue) !important; color: var(--sl-blue) !important;
+}
+html[data-theme] .sl-tag.success { background: var(--sl-green-bg) !important; border-color: var(--sl-green) !important; color: var(--sl-green) !important; }
+html[data-theme] .sl-tag.warning { background: var(--sl-amber-bg) !important; border-color: var(--sl-amber) !important; color: var(--sl-amber) !important; }
+html[data-theme] .sl-tag.danger  { background: var(--sl-red-bg) !important; border-color: var(--sl-red) !important; color: var(--sl-red) !important; }
+html[data-theme] .sl-note, html[data-theme] .callout {
+  background: var(--sl-amber-bg) !important; border-color: var(--sl-line) !important;
+  border-left-color: var(--sl-amber) !important; color: var(--sl-body) !important;
+}
+html[data-theme] .sl-note.info, html[data-theme] .codelab-safety {
+  background: var(--sl-blue-soft) !important; border-left-color: var(--sl-blue) !important;
+}
+html[data-theme] .sl-note.ok, html[data-theme] .callout.ok {
+  background: var(--sl-green-bg) !important; border-left-color: var(--sl-green) !important;
+}
+html[data-theme] .sl-note.no, html[data-theme] .callout.no {
+  background: var(--sl-red-bg) !important; border-left-color: var(--sl-red) !important;
+}
+html[data-theme] .btn-primary, html[data-theme] .el-button--primary {
+  background: var(--sl-blue) !important; border-color: var(--sl-blue) !important; color: #fff !important;
+}
+html[data-theme] .btn-outline-primary, html[data-theme] .el-button.is-plain {
+  color: var(--sl-blue) !important; border-color: var(--sl-blue) !important; background: transparent !important;
+}
+html[data-theme] .btn-outline-secondary, html[data-theme] .el-button:not(.el-button--primary) {
+  color: var(--sl-body) !important; border-color: var(--sl-line-strong) !important;
+  background: var(--sl-surface) !important;
+}
+html[data-theme] .el-input__wrapper, html[data-theme] .el-textarea__inner,
+html[data-theme] .form-control, html[data-theme] textarea {
+  background: var(--sl-surface) !important; color: var(--sl-ink) !important;
+  border-color: var(--sl-line-strong) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .el-progress-bar__outer { background: var(--sl-surface-2) !important; }
+html[data-theme] .el-progress-bar__inner { background: var(--sl-blue) !important; }
+html[data-theme] .el-tabs__item { color: var(--sl-body) !important; }
+html[data-theme] .el-skeleton__item { background: var(--sl-surface-2) !important; }
+
+/* 自测题 / 提示 / 输出 */
+html[data-theme] .quiz-opt {
+  background: var(--sl-surface) !important; border-color: var(--sl-line-strong) !important;
+  color: var(--sl-body) !important;
+}
+html[data-theme] .quiz-opt.right { background: var(--sl-green-bg) !important; border-color: var(--sl-green) !important; color: var(--sl-green) !important; }
+html[data-theme] .quiz-opt.wrong { background: var(--sl-red-bg) !important; border-color: var(--sl-red) !important; color: var(--sl-red) !important; }
+html[data-theme] .lesson-explain { background: var(--sl-amber-bg) !important; border-top-color: var(--sl-line) !important; color: var(--sl-amber) !important; }
+html[data-theme] .hint { background: var(--sl-amber-bg) !important; border-left-color: var(--sl-amber) !important; }
+html[data-theme] .lesson-example { background: var(--sl-code-bg) !important; border-color: var(--sl-line) !important; }
+html[data-theme] .lesson-example .sl-code { background: var(--sl-code-bg) !important; }
+html[data-theme] table.lab-table { background: var(--sl-surface) !important; }
+html[data-theme] table.lab-table th,
+html[data-theme] table.lab-table td {
+  border-color: var(--sl-line) !important; color: var(--sl-body) !important;
+}
+html[data-theme] table.lab-table th {
+  background: var(--sl-surface-2) !important; color: var(--sl-navy) !important;
+}
+html[data-theme] .form-control, html[data-theme] .form-select {
+  background: var(--sl-surface) !important; color: var(--sl-ink) !important;
+  border-color: var(--sl-line-strong) !important;
+}
+
+/* ----------------------------------------------------------- 代码：等宽字体 */
+html[data-theme] pre, html[data-theme] code, html[data-theme] kbd, html[data-theme] samp,
+html[data-theme] .sl-code, html[data-theme] .lab-code, html[data-theme] .out,
+html[data-theme] .cm-editor, html[data-theme] .cm-content, html[data-theme] .cm-line,
+html[data-theme] .cm-gutters, html[data-theme] textarea,
+html[data-theme] .el-textarea__inner, html[data-theme] .editor-bar {
+  font-family: var(--sl-mono) !important;
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  tab-size: 4 !important;
+}
+html[data-theme] pre.sl-code, html[data-theme] pre.lab-code, html[data-theme] .out {
+  background: var(--sl-code-bg) !important;
+  color: var(--sl-code-ink) !important;
+  border-color: var(--sl-line) !important;
+}
+html[data-theme] pre.sl-code code, html[data-theme] pre.lab-code code {
+  background: transparent !important; color: inherit !important;
+  border: 0 !important; padding: 0 !important; font-family: var(--sl-mono) !important;
+}
+html[data-theme] code.inline {
+  background: var(--sl-surface-2) !important;
+  border-color: var(--sl-line) !important;
+  color: var(--sl-blue) !important;
+  font-family: var(--sl-mono) !important;
+}
+html[data-theme] .editor-bar, html[data-theme] .lesson-example-label,
+html[data-theme] .codelab-safety, html[data-theme] .codelab-actions {
+  background: var(--sl-surface-2) !important;
+}
+
+/* CodeMirror 编辑器跟随主题 */
+html[data-theme] .cm-editor {
+  background: var(--sl-code-bg) !important;
+  color: var(--sl-code-ink) !important;
+  font-family: var(--sl-mono) !important;
+}
+html[data-theme] .cm-content, html[data-theme] .cm-line { color: var(--sl-code-ink) !important; caret-color: var(--sl-blue) !important; }
+html[data-theme] .cm-gutters { background: var(--sl-surface-2) !important; color: var(--sl-muted) !important; border-right-color: var(--sl-line) !important; }
+html[data-theme] .cm-activeLine { background: var(--sl-blue-soft) !important; }
+html[data-theme] .cm-activeLineGutter { background: var(--sl-blue-soft) !important; color: var(--sl-blue) !important; }
+html[data-theme] .cm-selectionBackground, html[data-theme] .cm-content ::selection { background: var(--sl-blue-soft) !important; }
+html[data-theme] .cm-cursor { border-left-color: var(--sl-blue) !important; }
+html[data-theme] .cm-tooltip, html[data-theme] .cm-tooltip-autocomplete {
+  background: var(--sl-surface) !important; border-color: var(--sl-line-strong) !important;
+  color: var(--sl-ink) !important;
+}
+html[data-theme] .cm-completionIcon { display: none !important; }
+
+/* ----------------------------------------------------------- 语法高亮 token */
+.hljs { display: block; overflow-x: auto; color: var(--sl-code-ink); background: var(--sl-code-bg); }
+.hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section,
+.hljs-doctag, .hljs-type, .hljs-name, .hljs-strong { color: var(--hl-keyword); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute,
+.hljs-symbol, .hljs-bullet, .hljs-link { color: var(--hl-string); }
+.hljs-number, .hljs-built_in, .hljs-builtin-name, .hljs-params,
+.hljs-variable, .hljs-template-variable, .hljs-selector-attr { color: var(--hl-number); }
+.hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-function .hljs-title,
+.hljs-selector-id, .hljs-selector-class { color: var(--hl-title); }
+.hljs-attr, .hljs-tag, .hljs-selector-pseudo, .hljs-selector-tag { color: var(--hl-attr); }
+.hljs-meta, .hljs-comment .hljs-doctag { color: var(--hl-meta); }
+.hljs-built_in, .hljs-class .hljs-title { color: var(--hl-title); font-weight: 600; }
+.hljs-emphasis { font-style: italic; }
+.hljs-deletion { color: var(--hl-attr); }
+
+/* ----------------------------------------------------------- 主题切换按钮 */
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--sl-line-strong);
+  color: var(--sl-body); font-family: var(--sl-sans);
+  font-size: 12.5px; font-weight: 600; padding: 5px 10px; cursor: pointer;
+  white-space: nowrap; margin-left: auto;
+}
+.theme-toggle:hover { background: var(--sl-blue-soft); color: var(--sl-blue); border-color: var(--sl-blue); }
+.theme-toggle svg { flex: none; }
+/* SSR 页主题按钮：按当前主题显示月/日图标 */
+html[data-theme="light"] .ico-sun { display: none; }
+html[data-theme="dark"] .ico-moon { display: none; }
+@media (max-width: 768px) {
+  .theme-toggle span { display: none; }
+  .theme-toggle { padding: 5px 7px; }
+}
+
+/* ==========================================================================
+   夜间模式补全 / 阅读排版
+   ========================================================================== */
+
+/* 全屏底色（overscroll 时不露白）、选中、占位符、滚动条 */
+html[data-theme] { background: var(--sl-bg) !important; }
+html[data-theme] body { min-height: 100vh; }
+html[data-theme] ::selection { background: var(--sl-blue-soft); color: var(--sl-ink); }
+html[data-theme] ::-moz-selection { background: var(--sl-blue-soft); color: var(--sl-ink); }
+html[data-theme] ::placeholder { color: var(--sl-muted) !important; opacity: 1; }
+html[data-theme] * { scrollbar-width: thin; scrollbar-color: var(--sl-line-strong) transparent; }
+html[data-theme] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-theme] ::-webkit-scrollbar-track { background: transparent; }
+html[data-theme] ::-webkit-scrollbar-thumb { background: var(--sl-line-strong); }
+html[data-theme] ::-webkit-scrollbar-thumb:hover { background: var(--sl-muted); }
+
+/* SSR 页选择器补漏：EXTRA_CSS 用的是 header.sl / .nav / .brand / .lk */
+html[data-theme] header.sl {
+  background: var(--sl-surface) !important;
+  border-bottom-color: var(--sl-navy) !important;
+  box-shadow: none !important;
+}
+html[data-theme] .nav .brand { color: var(--sl-navy) !important; }
+html[data-theme] .nav .brand i { color: var(--sl-orange) !important; }
+html[data-theme] .nav a.lk { color: var(--sl-body) !important; }
+html[data-theme] .nav a.lk:hover { color: var(--sl-blue) !important; }
+html[data-theme] .nav a.lk.on {
+  color: var(--sl-blue) !important;
+  border-bottom-color: var(--sl-blue) !important;
+  background: var(--sl-blue-soft) !important;
+}
+html[data-theme] .nav .text-muted { color: var(--sl-muted) !important; }
+/* 右上角 OpenBond 入口（SSR 页） */
+html[data-theme] .org { color: var(--sl-muted) !important; }
+html[data-theme] .org:hover { color: var(--sl-blue) !important; }
+html[data-theme] .news-item { border-bottom-color: var(--sl-line) !important; }
+html[data-theme] .pager a, html[data-theme] .pager span { color: var(--sl-blue) !important; }
+html[data-theme] .lab-note a { color: var(--sl-muted) !important; }
+html[data-theme] .sl-hero h1 { color: #f4f8fc !important; }
+html[data-theme] .theme-toggle { color: var(--sl-body) !important; border-color: var(--sl-line-strong) !important; background: transparent !important; }
+
+/* Bootstrap 组件在暗色下的补漏 */
+html[data-theme] .badge.bg-secondary { background: var(--sl-line-strong) !important; color: var(--sl-ink) !important; }
+html[data-theme] .badge.bg-light { background: var(--sl-surface-2) !important; color: var(--sl-body) !important; }
+html[data-theme] .badge.bg-primary { background: var(--sl-blue) !important; color: #fff !important; }
+html[data-theme] .table > :not(caption) > * > * { border-color: var(--sl-line) !important; }
+html[data-theme="dark"] .btn-close { filter: invert(1) grayscale(1); }
+
+/* Element Plus 补漏 */
+html[data-theme] .el-button {
+  --el-button-hover-bg-color: var(--sl-blue-soft);
+  --el-button-hover-text-color: var(--sl-blue);
+  --el-button-hover-border-color: var(--sl-blue);
+}
+html[data-theme] .el-button--primary,
+html[data-theme] .el-button--primary:hover { color: #fff !important; }
+html[data-theme] .el-tabs__nav-wrap::after { background: var(--sl-line) !important; }
+html[data-theme] .el-tabs__active-bar { background: var(--sl-blue) !important; }
+html[data-theme] .el-skeleton__item {
+  background: linear-gradient(90deg, var(--sl-surface-2) 25%, var(--sl-line) 37%, var(--sl-surface-2) 63%) !important;
+}
+html[data-theme] .sl-tag.dark { background: var(--sl-surface-2) !important; color: var(--sl-muted) !important; }
+
+/* CodeMirror 语法高亮：语义类名 → 主题变量，随主题自动切换 */
+html[data-theme] .cm-editor .sl-tok-kw   { color: var(--hl-keyword); font-weight: 600; }
+html[data-theme] .cm-editor .sl-tok-str  { color: var(--hl-string); }
+html[data-theme] .cm-editor .sl-tok-com  { color: var(--hl-comment); font-style: italic; }
+html[data-theme] .cm-editor .sl-tok-num  { color: var(--hl-number); }
+html[data-theme] .cm-editor .sl-tok-fn   { color: var(--hl-title); }
+html[data-theme] .cm-editor .sl-tok-cls  { color: var(--hl-title); font-weight: 600; }
+html[data-theme] .cm-editor .sl-tok-op   { color: var(--sl-muted); }
+html[data-theme] .cm-editor .sl-tok-var  { color: var(--sl-code-ink); }
+html[data-theme] .cm-editor .sl-tok-meta { color: var(--hl-meta); }
+html[data-theme] .cm-editor .cm-content { color: var(--sl-code-ink) !important; }
+
+/* 长文阅读排版 */
+html[data-theme] .lesson-text,
+html[data-theme] .lesson-intro p,
+html[data-theme] .sl-card p { line-height: 1.95 !important; }
+html[data-theme] .lesson-bullets li,
+html[data-theme] .lesson-objectives li,
+html[data-theme] .lesson-recap li,
+html[data-theme] .lesson-further li { line-height: 1.9 !important; }
+html[data-theme] .lesson-text { font-size: 15px; }
+html[data-theme] .sl-code, html[data-theme] .lab-code { font-size: 13px; line-height: 1.75; }
